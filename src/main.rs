@@ -1,6 +1,6 @@
 use bevy::{ecs::storage::Resources, prelude::*, state::commands};
 use crate::grid::{draw_grid, Grid, GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, CELL_BORDER_WIDTH};
-use crate::tetromino::{Tetromino, TetrominoLetter, TetrominoColor, draw_tetromino, Active};
+use crate::tetromino::{Tetromino, TetrominoLetter, TetrominoColor, draw_tetromino, Active, move_tetromino};
 use crate::systems::gravity;
 use crate::resources::GravityTimer;
 
@@ -13,7 +13,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (setup, draw_grid, draw_tetromino).chain())
-        .add_systems(Update, gravity)
+        .add_systems(Update, (gravity, move_tetromino))
         .run();
 }
 

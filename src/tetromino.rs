@@ -80,3 +80,20 @@ pub fn draw_tetromino(
         }
     }
 }
+
+pub fn move_tetromino(
+    mut tetromino_query: Query<(&TetrominoCell, &mut Transform)>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
+    for (_, mut transform) in tetromino_query.iter_mut() {
+        if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
+            transform.translation.x -= GRID_CELL_SIZE;
+        } 
+        if keyboard_input.just_pressed(KeyCode::ArrowRight) {
+            transform.translation.x += GRID_CELL_SIZE;
+        } 
+        if keyboard_input.just_pressed(KeyCode::ArrowDown) {
+            transform.translation.y -= GRID_CELL_SIZE;
+        }
+    }
+}

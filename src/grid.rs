@@ -30,7 +30,6 @@ pub enum CellState {
     Filled, // TODO add more states for different colors / tetrominoes
 }
 
-
 pub fn draw_grid(mut commands: Commands, grid: Res<Grid>, grid_config: Res<GridConfig>, mut materials: ResMut<Assets<ColorMaterial>>, mut meshes: ResMut<Assets<Mesh>>) {
     for y in 0..GRID_HEIGHT {
         for x in 0..GRID_WIDTH {
