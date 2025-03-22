@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::resources::LockInTimer;
 use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH};
+use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 
 #[derive(Component, Clone)]
 pub struct Tetromino {
@@ -104,7 +104,7 @@ impl Tetromino {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)] // TODO remove debug??
 pub enum TetrominoLetter {
     I,
     J,
@@ -145,6 +145,26 @@ pub struct Active {}
 
 #[derive(Component)]
 pub struct NeedsRedraw();
+
+#[derive(Event)]
+pub struct SpawnTetrominoEvent;
+
+pub fn spawn_tetromino(
+    mut commands: Commands,
+    mut tetromino_queue: ResMut<TetrominoQueue>,
+    mut spawn_tetromino_event: EventReader<SpawnTetrominoEvent>,
+) {
+    if !spawn_tetromino_event.is_empty() {
+        spawn_tetromino_event.clear();
+
+        commands.spawn((
+            Tetromino::create_tetromino(tetromino_queue.queue.pop().unwrap()),
+            Active {},
+            NeedsRedraw {}
+        ));
+        
+    }
+}
 
 pub fn draw_tetromino(
     mut commands: Commands,
@@ -232,6 +252,25 @@ pub fn move_tetromino(
             if keyboard_input.just_pressed(KeyCode::ControlLeft) {
                 tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
                 tetromino.shape = tetromino.rotate_tetromino_shape_counter_clockwise(); // Rotate the shape
+                commands.entity(entity).insert(NeedsRedraw {});
+            }
+        }
+    }
+}
+
+pub fn gravity(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
+    mut gravity_timer: ResMut<GravityTimer>,
+) {
+    gravity_timer.0.tick(time.delta());
+    if gravity_timer.0.just_finished() {
+        for (entity, mut tetromino) in tetromino.iter_mut() {
+
+        if tetromino.position.1 > tetromino.get_shape_height() - 1{
+                tetromino.position.1 -= 1;
+                // Add NeedsRedraw component to tetromino to trigger redraw
                 commands.entity(entity).insert(NeedsRedraw {});
             }
         }
