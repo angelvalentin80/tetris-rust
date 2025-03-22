@@ -1,16 +1,89 @@
 use bevy::prelude::*;
 
-use crate::grid::{GRID_CELL_SIZE, CELL_BORDER_WIDTH, GridConfig};
+use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH};
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Tetromino {
-    pub letter: TetrominoLetter,
     pub shape: [[bool; 4]; 4], // 4x4 grid for the tetromino shape
     pub position: (usize, usize), // (x, y) position on the grid
     pub rotation: usize, // 0-3 for 0-270 degrees
     pub color: Color,
 }
 
+impl Tetromino {
+    pub fn create_tetromino(letter: TetrominoLetter) -> Self {
+        let shape = match letter {
+            TetrominoLetter::I => [[true, true, true, true], 
+                                   [false, false, false, false], 
+                                   [false, false, false, false], 
+                                   [false, false, false, false]],
+            TetrominoLetter::J => [[true, false, false, false], 
+                                   [true, true, true, false], 
+                                   [false, false, false, false], 
+                                   [false, false, false, false]],
+            TetrominoLetter::L => [[false, false, true, false], 
+                                   [true, true, true, false], 
+                                   [false, false, false, false], 
+                                   [false, false, false, false]],
+            TetrominoLetter::O => [[true, true, false, false], 
+                                   [true, true, false, false], 
+                                   [false, false, false, false], 
+                                   [false, false, false, false]],
+            TetrominoLetter::S => [[false,true,true,false], 
+                                   [true,true,false,false], 
+                                   [false,false,false,false], 
+                                   [false,false,false,false]],
+            TetrominoLetter::Z => [[true,true,false,false], 
+                                   [false,true,true,false], 
+                                   [false,false,false,false], 
+                                   [false,false,false,false]],
+            TetrominoLetter::T => [[false,true,false,false],
+                                   [true,true,true,false],
+                                   [false,false,false,false],
+                                   [false,false,false,false]],
+        };
+        let color = match letter {
+            TetrominoLetter::I => TetrominoColor::LightBlue.to_color(),
+            TetrominoLetter::J => TetrominoColor::DarkBlue.to_color(),
+            TetrominoLetter::L => TetrominoColor::Orange.to_color(),
+            TetrominoLetter::O => TetrominoColor::Yellow.to_color(),
+            TetrominoLetter::S => TetrominoColor::Green.to_color(),
+            TetrominoLetter::Z => TetrominoColor::Red.to_color(),
+            TetrominoLetter::T => TetrominoColor::Magenta.to_color(),
+        };
+        Self {
+            shape,
+            position: (3 , 20), // Spawn position
+            rotation: 0,
+            color,
+        }
+    }
+
+    pub fn get_shape_width(&self) -> usize {
+        let mut width = 0;
+        for x in 0..4 {
+            for y in 0..4 {
+                if self.shape[y][x] {
+                    width = x + 1;
+                }
+            }
+        }
+        width
+    }
+    pub fn get_shape_height(&self) -> usize {
+        let mut height = 0;
+        for y in 0..4 {
+            for x in 0..4 {
+                if self.shape[y][x] {
+                    height = y + 1;
+                }
+            }
+        }
+        height
+    }
+}
+
+#[derive(Clone)]
 pub enum TetrominoLetter {
     I,
     J,
@@ -43,29 +116,39 @@ impl TetrominoColor {
         }
     }
 }
+#[derive(Component)]
+pub struct TetrominoCell {}
 
 #[derive(Component)]
 pub struct Active {}
 
 #[derive(Component)]
-pub struct TetrominoCell {}
+pub struct NeedsRedraw();
 
 pub fn draw_tetromino(
     mut commands: Commands,
-    query: Query<&mut Tetromino, With<Active>>,
+    tetromino_query: Query<&mut Tetromino, (With<Active>, With<NeedsRedraw>)>,
+    tetromino_cell_query: Query<(Entity, &mut TetrominoCell)>, 
     grid_config: Res<GridConfig>, 
     mut materials: ResMut<Assets<ColorMaterial>>, 
     mut meshes: ResMut<Assets<Mesh>>
 ){
-    for tetromino in query.iter() {
+    // Clear the previous tetromino cells
+    if !tetromino_query.is_empty() {
+        for (entity, _) in tetromino_cell_query.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+    
+    for tetromino  in tetromino_query.iter() {
         let start_x = tetromino.position.0;
         let start_y = tetromino.position.1;
 
         for y in 0..4 {
             for x in 0..4 {
-                if tetromino.shape[y][x] {
-                    let cell_x = grid_config.start_x + (start_x + x) as f32 * GRID_CELL_SIZE;
-                    let cell_y = grid_config.start_y + (start_y - y) as f32 * GRID_CELL_SIZE;
+            if tetromino.shape[y][x] {
+                let cell_x = grid_config.start_x + (start_x + x) as f32 * GRID_CELL_SIZE;
+                let cell_y = grid_config.start_y + (start_y - y) as f32 * GRID_CELL_SIZE;
 
                     // Draw the cell
                     commands.spawn((
@@ -82,18 +165,29 @@ pub fn draw_tetromino(
 }
 
 pub fn move_tetromino(
-    mut tetromino_query: Query<(&TetrominoCell, &mut Transform)>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut tetromino: Query<&mut Tetromino, With<Active>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>
 ) {
-    for (_, mut transform) in tetromino_query.iter_mut() {
-        if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
-            transform.translation.x -= GRID_CELL_SIZE;
-        } 
-        if keyboard_input.just_pressed(KeyCode::ArrowRight) {
-            transform.translation.x += GRID_CELL_SIZE;
-        } 
-        if keyboard_input.just_pressed(KeyCode::ArrowDown) {
-            transform.translation.y -= GRID_CELL_SIZE;
+    for mut tetromino in tetromino.iter_mut() {
+
+
+        if tetromino.position.0 > 0 {
+            if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
+                tetromino.position.0 -= 1;
+            } 
         }
+
+        if tetromino.position.0 < GRID_WIDTH - tetromino.get_shape_width() {
+            if keyboard_input.just_pressed(KeyCode::ArrowRight) {
+                tetromino.position.0 += 1;
+            } 
+        }
+
+        if tetromino.position.1 > tetromino.get_shape_height() - 1 {
+            if keyboard_input.just_pressed(KeyCode::ArrowDown) {
+                tetromino.position.1 -= 1;
+            }
+        }
+
     }
 }
