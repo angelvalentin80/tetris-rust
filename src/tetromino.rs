@@ -59,6 +59,26 @@ impl Tetromino {
         }
     }
 
+    pub fn rotate_tetromino_shape_clockwise(&self) -> [[bool; 4]; 4] {
+        let mut new_shape = [[false; 4]; 4];
+        for y in 0..4 {
+            for x in 0..4 {
+                new_shape[x][3 - y] = self.shape[y][x];
+            }
+        }
+        new_shape
+    }
+
+    pub fn rotate_tetromino_shape_counter_clockwise(&self) -> [[bool; 4]; 4] {
+        let mut new_shape = [[false; 4]; 4];
+        for y in 0..4 {
+            for x in 0..4 {
+                new_shape[3 - x][y] = self.shape[y][x];
+            }
+        }
+        new_shape
+    }
+
     pub fn get_shape_width(&self) -> usize {
         let mut width = 0;
         for x in 0..4 {
@@ -127,7 +147,7 @@ pub struct NeedsRedraw();
 
 pub fn draw_tetromino(
     mut commands: Commands,
-    tetromino_query: Query<&mut Tetromino, (With<Active>, With<NeedsRedraw>)>,
+    tetromino_query: Query<(Entity, &mut Tetromino), (With<Active>, With<NeedsRedraw>)>,
     tetromino_cell_query: Query<(Entity, &mut TetrominoCell)>, 
     grid_config: Res<GridConfig>, 
     mut materials: ResMut<Assets<ColorMaterial>>, 
@@ -140,7 +160,7 @@ pub fn draw_tetromino(
         }
     }
     
-    for tetromino  in tetromino_query.iter() {
+    for (entity, tetromino ) in tetromino_query.iter() {
         let start_x = tetromino.position.0;
         let start_y = tetromino.position.1;
 
@@ -161,33 +181,50 @@ pub fn draw_tetromino(
                 }
             }
         }
+        commands.entity(entity).remove::<NeedsRedraw>(); // Remove the NeedsRedraw component after drawing 
     }
 }
 
 pub fn move_tetromino(
-    mut tetromino: Query<&mut Tetromino, With<Active>>,
+    mut commands: Commands,
+    mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
     keyboard_input: Res<ButtonInput<KeyCode>>
 ) {
-    for mut tetromino in tetromino.iter_mut() {
-
+    for (entity, mut tetromino) in tetromino.iter_mut() {
 
         if tetromino.position.0 > 0 {
             if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
                 tetromino.position.0 -= 1;
+                commands.entity(entity).insert(NeedsRedraw {});
             } 
         }
 
         if tetromino.position.0 < GRID_WIDTH - tetromino.get_shape_width() {
             if keyboard_input.just_pressed(KeyCode::ArrowRight) {
                 tetromino.position.0 += 1;
+                commands.entity(entity).insert(NeedsRedraw {});
             } 
         }
 
         if tetromino.position.1 > tetromino.get_shape_height() - 1 {
             if keyboard_input.just_pressed(KeyCode::ArrowDown) {
                 tetromino.position.1 -= 1;
+                commands.entity(entity).insert(NeedsRedraw {});
             }
         }
 
+        if tetromino.position.1 > tetromino.get_shape_height() - 1 && tetromino.position.0 < GRID_WIDTH - tetromino.get_shape_width() {
+            if keyboard_input.just_pressed(KeyCode::ArrowUp) {
+                tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino
+                tetromino.shape = tetromino.rotate_tetromino_shape_clockwise(); // Rotate the shape
+                commands.entity(entity).insert(NeedsRedraw {});
+            }
+
+            if keyboard_input.just_pressed(KeyCode::ControlLeft) {
+                tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
+                tetromino.shape = tetromino.rotate_tetromino_shape_counter_clockwise(); // Rotate the shape
+                commands.entity(entity).insert(NeedsRedraw {});
+            }
+        }
     }
 }
