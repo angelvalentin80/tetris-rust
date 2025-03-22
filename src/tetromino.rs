@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::resources::LockInTimer;
 use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH};
 
 #[derive(Component, Clone)]
@@ -188,38 +189,46 @@ pub fn draw_tetromino(
 pub fn move_tetromino(
     mut commands: Commands,
     mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
+    mut lock_in_timer: ResMut<LockInTimer>,
     keyboard_input: Res<ButtonInput<KeyCode>>
 ) {
     for (entity, mut tetromino) in tetromino.iter_mut() {
 
-        if tetromino.position.0 > 0 {
+        // Move Left
+        if !is_tetromino_hit_left_wall(&tetromino) {
             if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
                 tetromino.position.0 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
+                lock_in_timer.0.reset(); // Reset the lock-in timer when moving left
             } 
         }
 
-        if tetromino.position.0 < GRID_WIDTH - tetromino.get_shape_width() {
+        // Move Right 
+        if !is_tetromino_hit_right_wall(&tetromino){
             if keyboard_input.just_pressed(KeyCode::ArrowRight) {
                 tetromino.position.0 += 1;
                 commands.entity(entity).insert(NeedsRedraw {});
+                lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
             } 
         }
 
-        if tetromino.position.1 > tetromino.get_shape_height() - 1 {
+        // Move Down 
+        if !is_tetromino_hit_floor(&tetromino) {
             if keyboard_input.just_pressed(KeyCode::ArrowDown) {
                 tetromino.position.1 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
             }
         }
 
-        if tetromino.position.1 > tetromino.get_shape_height() - 1 && tetromino.position.0 < GRID_WIDTH - tetromino.get_shape_width() {
+        if !is_tetromino_hit_floor(&tetromino) && !is_tetromino_hit_left_wall(&tetromino) && !is_tetromino_hit_right_wall(&tetromino) {
+            // Rotate Clockwise 
             if keyboard_input.just_pressed(KeyCode::ArrowUp) {
                 tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino
                 tetromino.shape = tetromino.rotate_tetromino_shape_clockwise(); // Rotate the shape
                 commands.entity(entity).insert(NeedsRedraw {});
             }
 
+            // Rotate Counter Clockwise 
             if keyboard_input.just_pressed(KeyCode::ControlLeft) {
                 tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
                 tetromino.shape = tetromino.rotate_tetromino_shape_counter_clockwise(); // Rotate the shape
@@ -227,4 +236,38 @@ pub fn move_tetromino(
             }
         }
     }
+}
+
+pub fn detect_lock_position(
+    mut lock_in_timer: ResMut<LockInTimer>,
+    time: Res<Time>,
+    tetromino_query: Query<&Tetromino, With<Active>>,
+) {
+    for tetromino in tetromino_query.iter() {
+        if is_tetromino_hit_floor(&tetromino){
+            lock_in_timer.0.tick(time.delta());
+        }
+    }
+}
+
+// Helpers
+fn is_tetromino_hit_floor(tetromino: &Tetromino) -> bool{
+    if tetromino.position.1 == tetromino.get_shape_height() - 1 {
+        return true;
+    }
+    false
+} 
+
+fn is_tetromino_hit_left_wall(tetromino: &Tetromino) -> bool {
+    if tetromino.position.0 == 0 {
+        return true;
+    }
+    false
+}
+
+fn is_tetromino_hit_right_wall(tetromino: &Tetromino) -> bool {
+    if tetromino.position.0 == GRID_WIDTH - tetromino.get_shape_width() {
+        return true;
+    }
+    false
 }
