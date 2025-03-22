@@ -29,8 +29,9 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(Grid::new());
 
     // Adding our tetromino resource
-    commands.spawn((Tetromino::create_tetromino(TetrominoLetter::I), Active {}));
+    // commands.spawn((Tetromino::create_tetromino(TetrominoLetter::I), Active {}));
     // commands.spawn((Tetromino::create_tetromino(TetrominoLetter::O), Active {}));
+    commands.spawn((Tetromino::create_tetromino(TetrominoLetter::J), Active {}));
         
     // Add our gravity resource 
     let gravity_timer = GravityTimer(Timer::from_seconds(1.0, TimerMode::Repeating));
