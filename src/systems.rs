@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::grid::{Grid, CellState, GRID_WIDTH, RedrawGridEvent};
-use crate::tetromino::{Active, Tetromino, TetrominoCell, SpawnTetrominoEvent};
+use crate::tetromino::{Active, SpawnTetrominoEvent, Tetromino, TetrominoCell};
 use crate::resources::LockInTimer;
 
 pub fn lock_in_tetromino(
@@ -8,7 +8,7 @@ pub fn lock_in_tetromino(
     mut grid: ResMut<Grid>, 
     mut redraw_grid_event: EventWriter<RedrawGridEvent>,
     mut spawn_tetromino_event: EventWriter<SpawnTetrominoEvent>,
-    lock_in_timer: Res<LockInTimer>,
+    mut lock_in_timer: ResMut<LockInTimer>,
     tetromino_query: Query<(Entity, &Tetromino), With<Active>>,
     tetromino_cell_query: Query<(Entity, &TetrominoCell)>,
 ) {
@@ -38,5 +38,6 @@ pub fn lock_in_tetromino(
 
         redraw_grid_event.send(RedrawGridEvent);
         spawn_tetromino_event.send(SpawnTetrominoEvent);
+        lock_in_timer.0.reset();
     }
 }

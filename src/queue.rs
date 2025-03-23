@@ -18,7 +18,6 @@ pub fn shuffle_tetrominoes_into_queue(
     if !bag_low_event.is_empty() || !game_start_event.is_empty() {
 
         bag_low_event.clear();
-        game_start_event.clear();
 
         let mut tetrominoes = vec![
             TetrominoLetter::I,
@@ -32,7 +31,10 @@ pub fn shuffle_tetrominoes_into_queue(
 
         tetrominoes.shuffle(&mut thread_rng());
         tetromino_queue.queue.extend(tetrominoes);
-        spawn_tetromino_event.send(SpawnTetrominoEvent);
+        if !game_start_event.is_empty() {
+            spawn_tetromino_event.send(SpawnTetrominoEvent);
+        }
+        game_start_event.clear();
     }
 }
 

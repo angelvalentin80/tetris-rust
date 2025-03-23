@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::grid::{draw_grid, Grid, GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, CELL_BORDER_WIDTH, RedrawGridEvent, redraw_grid};
 use crate::tetromino::{draw_tetromino, move_tetromino, detect_lock_position, spawn_tetromino, gravity, SpawnTetrominoEvent};
-use crate::systems::{lock_in_tetromino};
+use crate::systems::lock_in_tetromino;
 use crate::resources::{GravityTimer, LockInTimer, TetrominoQueue, GameState};
 use crate::queue::{shuffle_tetrominoes_into_queue, detect_bag_low, BagLowEvent};
 use crate::game_manager::{GameStartEvent, detect_start_game};
@@ -58,7 +58,8 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(Grid::new());
 
     // Add our gravity resource 
-    let gravity_timer = GravityTimer(Timer::from_seconds(1.0, TimerMode::Repeating));
+    // TODO testing with faster time to speed things up. Original was 1, not 0.1
+    let gravity_timer = GravityTimer(Timer::from_seconds(0.1, TimerMode::Repeating));
     commands.insert_resource(gravity_timer);
 
     // Add our lock in resource

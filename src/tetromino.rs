@@ -210,6 +210,7 @@ pub fn move_tetromino(
     mut commands: Commands,
     mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
     mut lock_in_timer: ResMut<LockInTimer>,
+    mut gravity_timer: ResMut<GravityTimer>,
     keyboard_input: Res<ButtonInput<KeyCode>>
 ) {
     for (entity, mut tetromino) in tetromino.iter_mut() {
@@ -237,6 +238,7 @@ pub fn move_tetromino(
             if keyboard_input.just_pressed(KeyCode::ArrowDown) {
                 tetromino.position.1 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
+                gravity_timer.0.reset();
             }
         }
 
@@ -267,12 +269,11 @@ pub fn gravity(
     gravity_timer.0.tick(time.delta());
     if gravity_timer.0.just_finished() {
         for (entity, mut tetromino) in tetromino.iter_mut() {
-
-        if tetromino.position.1 > tetromino.get_shape_height() - 1{
-                tetromino.position.1 -= 1;
-                // Add NeedsRedraw component to tetromino to trigger redraw
-                commands.entity(entity).insert(NeedsRedraw {});
-            }
+            if !is_tetromino_hit_floor(&tetromino) {
+                    tetromino.position.1 -= 1;
+                    // Add NeedsRedraw component to tetromino to trigger redraw
+                    commands.entity(entity).insert(NeedsRedraw {});
+                }
         }
     }
 }
