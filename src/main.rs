@@ -58,8 +58,7 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(Grid::new());
 
     // Add our gravity resource 
-    // TODO testing with faster time to speed things up. Original was 1, not 0.1
-    let gravity_timer = GravityTimer(Timer::from_seconds(0.1, TimerMode::Repeating));
+    let gravity_timer = GravityTimer(Timer::from_seconds(1.0, TimerMode::Repeating));
     commands.insert_resource(gravity_timer);
 
     // Add our lock in resource
