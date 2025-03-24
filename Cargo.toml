@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 bevy = "0.15.3"
-rand = "0.8"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
