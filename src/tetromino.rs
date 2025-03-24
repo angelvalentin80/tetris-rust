@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 
-use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH};
+use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 
 #[derive(Component, Clone)]
 pub struct Tetromino {
     pub shape: [[bool; 4]; 4], // 4x4 grid for the tetromino shape
-    pub position: (usize, usize), // (x, y) position on the grid
+    pub position: (i32, i32), // (x, y) position on the grid
     pub rotation: usize, // 0-3 for 0-270 degrees
     pub color: Color,
 }
@@ -79,29 +79,28 @@ impl Tetromino {
         }
         new_shape
     }
-
-    pub fn get_shape_width(&self) -> usize {
-        let mut width = 0;
-        for x in 0..4 {
-            for y in 0..4 {
-                if self.shape[y][x] {
-                    width = x + 1;
-                }
-            }
-        }
-        width
-    }
-    pub fn get_shape_height(&self) -> usize {
-        let mut height = 0;
-        for y in 0..4 {
-            for x in 0..4 {
-                if self.shape[y][x] {
-                    height = y + 1;
-                }
-            }
-        }
-        height
-    }
+    // pub fn get_shape_width(&self) -> usize {
+    //     let mut width = 0;
+    //     for x in 0..4 {
+    //         for y in 0..4 {
+    //             if self.shape[y][x] {
+    //                 width = x + 1;
+    //             }
+    //         }
+    //     }
+    //     width
+    // }
+    // pub fn get_shape_height(&self) -> usize {
+    //     let mut height = 0;
+    //     for y in 0..4 {
+    //         for x in 0..4 {
+    //             if self.shape[y][x] {
+    //                 height = y + 1;
+    //             }
+    //         }
+    //     }
+    //     height
+    // }
 }
 
 #[derive(Clone, Debug)] // TODO remove debug??
@@ -187,9 +186,9 @@ pub fn draw_tetromino(
 
         for y in 0..4 {
             for x in 0..4 {
-            if tetromino.shape[y][x] {
-                let cell_x = grid_config.start_x + (start_x + x) as f32 * GRID_CELL_SIZE;
-                let cell_y = grid_config.start_y + (start_y - y) as f32 * GRID_CELL_SIZE;
+                if tetromino.shape[y][x] {
+                    let cell_x = grid_config.start_x + (start_x + x as i32) as f32 * GRID_CELL_SIZE;
+                    let cell_y = grid_config.start_y + (start_y - y as i32) as f32 * GRID_CELL_SIZE;
 
                     // Draw the cell
                     commands.spawn((
@@ -242,20 +241,44 @@ pub fn move_tetromino(
             }
         }
 
-        if !is_tetromino_hit_floor(&tetromino) && !is_tetromino_hit_left_wall(&tetromino) && !is_tetromino_hit_right_wall(&tetromino) {
-            // Rotate Clockwise 
-            if keyboard_input.just_pressed(KeyCode::ArrowUp) {
+        // Rotate Clockwise 
+        if keyboard_input.just_pressed(KeyCode::ArrowUp) {
+            println!("Attempting to rotate clockwise");
+            let new_shape = tetromino.rotate_tetromino_shape_clockwise();
+            if !is_collision(&tetromino.position, &new_shape) {
+                println!("No collision");
                 tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino
-                tetromino.shape = tetromino.rotate_tetromino_shape_clockwise(); // Rotate the shape
+                tetromino.shape = new_shape; // Rotate the shape
                 commands.entity(entity).insert(NeedsRedraw {});
-            }
-
-            // Rotate Counter Clockwise 
-            if keyboard_input.just_pressed(KeyCode::ControlLeft) {
+            } else {
+                println!("Collision detected doing some calculations");
+                // Adjust position if collision detected
                 tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
-                tetromino.shape = tetromino.rotate_tetromino_shape_counter_clockwise(); // Rotate the shape
+                tetromino.shape = new_shape; // Rotate the shape
+                adjust_position(&mut tetromino);
                 commands.entity(entity).insert(NeedsRedraw {});
             }
+            lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
+        }
+
+        // Rotate Counter Clockwise 
+        if keyboard_input.just_pressed(KeyCode::ControlLeft) {
+            println!("Attempting to rotate counter clockwise");
+            let new_shape = tetromino.rotate_tetromino_shape_counter_clockwise();
+            if !is_collision(&tetromino.position, &new_shape) {
+                println!("No collision");
+                tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
+                tetromino.shape = new_shape; // Rotate the shape
+                commands.entity(entity).insert(NeedsRedraw {});
+            } else {
+                println!("Collision detected doing some calculations");
+                // Adjust position if collision detected
+                tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
+                tetromino.shape = new_shape; // Rotate the shape
+                adjust_position(&mut tetromino);
+                commands.entity(entity).insert(NeedsRedraw {});
+            }
+            lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
         }
     }
 }
@@ -290,24 +313,75 @@ pub fn detect_lock_position(
     }
 }
 
-// Helpers
-fn is_tetromino_hit_floor(tetromino: &Tetromino) -> bool{
-    if tetromino.position.1 == tetromino.get_shape_height() - 1 {
-        return true;
-    }
-    false
-} 
-
-fn is_tetromino_hit_left_wall(tetromino: &Tetromino) -> bool {
-    if tetromino.position.0 == 0 {
-        return true;
+fn is_collision(position: &(i32, i32), shape: &[[bool; 4]; 4]) -> bool {
+    for y in 0..4 {
+        for x in 0..4 {
+            if shape[y][x] {
+                let new_x = position.0 + x as i32;
+                let new_y = position.1 - y as i32;
+                if new_x >= GRID_WIDTH as i32 || new_x < 0 || new_y < 0 {
+                    return true;
+                }
+            }
+        }
     }
     false
 }
 
-fn is_tetromino_hit_right_wall(tetromino: &Tetromino) -> bool {
-    if tetromino.position.0 == GRID_WIDTH - tetromino.get_shape_width() {
-        return true;
+fn adjust_position(tetromino: &mut Tetromino) {
+    // Adjust position to prevent collision with left wall
+    while is_tetromino_hit_left_wall(tetromino) {
+        tetromino.position.0 += 1;
     }
-    false
+
+    // Adjust position to prevent collision with right wall
+    while is_tetromino_hit_right_wall(tetromino) {
+        tetromino.position.0 -= 1;
+    }
+
+    // Adjust position to prevent collision with floor
+    while is_tetromino_hit_floor(tetromino) {
+        tetromino.position.1 += 1;
+    }
+}
+
+
+// Helpers
+fn is_tetromino_hit_floor(tetromino: &Tetromino) -> bool{
+    for y in 0..4 {
+        for x in 0..4 {
+            if tetromino.shape[y][x] {
+                if tetromino.position.1 - y as i32 <= 0 {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+} 
+
+fn is_tetromino_hit_left_wall(tetromino: &Tetromino) -> bool {
+    for y in 0..4 {
+        for x in 0..4 {
+            if tetromino.shape[y][x] {
+                if tetromino.position.0 + x as i32 <= 0 {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+fn is_tetromino_hit_right_wall(tetromino: &Tetromino) -> bool {
+    for y in 0..4 {
+        for x in 0..4 {
+            if tetromino.shape[y][x] {
+                if tetromino.position.0 + x as i32 >= GRID_WIDTH as i32 - 1 {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }

@@ -22,7 +22,7 @@ pub fn lock_in_tetromino(
             for y in 0..4 {
                 for x in 0..4 {
                     if tetromino.shape[y][x] {
-                        let index = (start_y - y) * GRID_WIDTH + (start_x + x);
+                        let index = ((start_y - y as i32) * GRID_WIDTH as i32 + (start_x + x as i32)) as usize;
                         grid.cells[index] = CellState::Filled(tetromino.color);
                     }
                 }
