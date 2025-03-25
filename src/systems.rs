@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::grid::{Grid, CellState, GRID_WIDTH, RedrawGridEvent};
+use crate::grid::{Grid, CellState, RedrawGridEvent, get_vec_index_from_grid_coordinates};
 use crate::tetromino::{Active, SpawnTetrominoEvent, Tetromino, TetrominoCell};
 use crate::resources::LockInTimer;
 
@@ -22,7 +22,7 @@ pub fn lock_in_tetromino(
             for y in 0..4 {
                 for x in 0..4 {
                     if tetromino.shape[y][x] {
-                        let index = ((start_y - y as i32) * GRID_WIDTH as i32 + (start_x + x as i32)) as usize;
+                        let index = get_vec_index_from_grid_coordinates(start_x + x as i32, start_y - y as i32);
                         grid.cells[index] = CellState::Filled(tetromino.color);
                     }
                 }

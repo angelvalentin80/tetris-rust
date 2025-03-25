@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT};
+use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH, Grid, get_vec_index_from_grid_coordinates, CellState, GRID_HEIGHT};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 
 #[derive(Component, Clone)]
@@ -9,6 +9,7 @@ pub struct Tetromino {
     pub position: (i32, i32), // (x, y) position on the grid
     pub rotation: usize, // 0-3 for 0-270 degrees
     pub color: Color,
+    pub letter: TetrominoLetter,
 }
 
 impl Tetromino {
@@ -54,9 +55,10 @@ impl Tetromino {
         };
         Self {
             shape,
-            position: (3 , 20), // Spawn position
+            position: (3 , 16), // Spawn position // TODO make this above the grid probably when you have implemented the hidden grid
             rotation: 0,
             color,
+            letter
         }
     }
 
@@ -79,28 +81,6 @@ impl Tetromino {
         }
         new_shape
     }
-    // pub fn get_shape_width(&self) -> usize {
-    //     let mut width = 0;
-    //     for x in 0..4 {
-    //         for y in 0..4 {
-    //             if self.shape[y][x] {
-    //                 width = x + 1;
-    //             }
-    //         }
-    //     }
-    //     width
-    // }
-    // pub fn get_shape_height(&self) -> usize {
-    //     let mut height = 0;
-    //     for y in 0..4 {
-    //         for x in 0..4 {
-    //             if self.shape[y][x] {
-    //                 height = y + 1;
-    //             }
-    //         }
-    //     }
-    //     height
-    // }
 }
 
 #[derive(Clone, Debug)] // TODO remove debug??
@@ -210,12 +190,13 @@ pub fn move_tetromino(
     mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
     mut lock_in_timer: ResMut<LockInTimer>,
     mut gravity_timer: ResMut<GravityTimer>,
+    grid: Res<Grid>,
     keyboard_input: Res<ButtonInput<KeyCode>>
 ) {
     for (entity, mut tetromino) in tetromino.iter_mut() {
 
         // Move Left
-        if !is_tetromino_hit_left_wall(&tetromino) {
+        if !is_tetromino_hit_left_wall(&tetromino) && !is_tetromino_hit_left_piece(&tetromino, &grid) {
             if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
                 tetromino.position.0 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
@@ -224,7 +205,7 @@ pub fn move_tetromino(
         }
 
         // Move Right 
-        if !is_tetromino_hit_right_wall(&tetromino){
+        if !is_tetromino_hit_right_wall(&tetromino) && !is_tetromino_hit_right_piece(&tetromino, &grid) {
             if keyboard_input.just_pressed(KeyCode::ArrowRight) {
                 tetromino.position.0 += 1;
                 commands.entity(entity).insert(NeedsRedraw {});
@@ -233,7 +214,7 @@ pub fn move_tetromino(
         }
 
         // Move Down 
-        if !is_tetromino_hit_floor(&tetromino) {
+        if !is_tetromino_hit_floor(&tetromino) && !is_tetromino_hit_floor_piece(&tetromino, &grid) {
             if keyboard_input.just_pressed(KeyCode::ArrowDown) {
                 tetromino.position.1 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
@@ -241,44 +222,61 @@ pub fn move_tetromino(
             }
         }
 
-        // Rotate Clockwise 
+        // Rotate Clockwise
         if keyboard_input.just_pressed(KeyCode::ArrowUp) {
-            println!("Attempting to rotate clockwise");
             let new_shape = tetromino.rotate_tetromino_shape_clockwise();
-            if !is_collision(&tetromino.position, &new_shape) {
-                println!("No collision");
+            if !is_collision(&tetromino.position, &new_shape, &grid) {
+                // If new shape has no collision, rotate normally 
                 tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino
                 tetromino.shape = new_shape; // Rotate the shape
                 commands.entity(entity).insert(NeedsRedraw {});
             } else {
-                println!("Collision detected doing some calculations");
-                // Adjust position if collision detected
-                tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
-                tetromino.shape = new_shape; // Rotate the shape
-                adjust_position(&mut tetromino);
-                commands.entity(entity).insert(NeedsRedraw {});
+                // Adjust position using SRS 
+                let from_rotation = &tetromino.rotation;
+                let to_rotation = (&tetromino.rotation + 1) % 4;
+                let kick_table = get_kick_table_scenario(&tetromino.letter, &from_rotation, &to_rotation);
+                let maybe_new_kick=  maybe_try_kicks(&tetromino, &kick_table, &grid, &new_shape);
+                if let Some((dx, dy)) = maybe_new_kick {
+                    tetromino.position.0 += dx;
+                    tetromino.position.1 -= dy;
+                    tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino clockwise
+                    tetromino.shape = new_shape; // Rotate the shape
+                    commands.entity(entity).insert(NeedsRedraw {});
+                } else {
+                    // If no valid kick found, do nothing
+                    return;
+                }
             }
-            lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
+            lock_in_timer.0.reset(); // Reset the lock-in timer when rotating 
         }
 
         // Rotate Counter Clockwise 
         if keyboard_input.just_pressed(KeyCode::ControlLeft) {
-            println!("Attempting to rotate counter clockwise");
             let new_shape = tetromino.rotate_tetromino_shape_counter_clockwise();
-            if !is_collision(&tetromino.position, &new_shape) {
-                println!("No collision");
+            if !is_collision(&tetromino.position, &new_shape, &grid) {
+                // If new shape has no collision, rotate normally 
                 tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
                 tetromino.shape = new_shape; // Rotate the shape
                 commands.entity(entity).insert(NeedsRedraw {});
             } else {
-                println!("Collision detected doing some calculations");
-                // Adjust position if collision detected
-                tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
-                tetromino.shape = new_shape; // Rotate the shape
-                adjust_position(&mut tetromino);
-                commands.entity(entity).insert(NeedsRedraw {});
+                // Adjust position using SRS 
+                let from_rotation = &tetromino.rotation;
+                let to_rotation = (&tetromino.rotation + 3) % 4;
+                let kick_table = get_kick_table_scenario(&tetromino.letter, &from_rotation, &to_rotation);
+                let maybe_new_kick=  maybe_try_kicks(&tetromino, &kick_table, &grid, &new_shape);
+
+                if let Some((dx, dy)) = maybe_new_kick {
+                    tetromino.position.0 += dx;
+                    tetromino.position.1 -= dy;
+                    tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
+                    tetromino.shape = new_shape; // Rotate the shape
+                    commands.entity(entity).insert(NeedsRedraw {});
+                } else {
+                    // If no valid kick found, do nothing
+                    return;
+                }
             }
-            lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
+            lock_in_timer.0.reset(); // Reset the lock-in timer when rotating
         }
     }
 }
@@ -286,13 +284,14 @@ pub fn move_tetromino(
 pub fn gravity(
     mut commands: Commands,
     time: Res<Time>,
+    grid: Res<Grid>,
     mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
     mut gravity_timer: ResMut<GravityTimer>,
 ) {
     gravity_timer.0.tick(time.delta());
     if gravity_timer.0.just_finished() {
         for (entity, mut tetromino) in tetromino.iter_mut() {
-            if !is_tetromino_hit_floor(&tetromino) {
+            if !is_tetromino_hit_floor(&tetromino) && !is_tetromino_hit_floor_piece(&tetromino, &grid) {
                     tetromino.position.1 -= 1;
                     // Add NeedsRedraw component to tetromino to trigger redraw
                     commands.entity(entity).insert(NeedsRedraw {});
@@ -304,22 +303,31 @@ pub fn gravity(
 pub fn detect_lock_position(
     mut lock_in_timer: ResMut<LockInTimer>,
     time: Res<Time>,
+    grid: Res<Grid>,
     tetromino_query: Query<&Tetromino, With<Active>>,
 ) {
     for tetromino in tetromino_query.iter() {
-        if is_tetromino_hit_floor(&tetromino){
+        if is_tetromino_hit_floor(&tetromino) || is_tetromino_hit_floor_piece(&tetromino, &grid) {
             lock_in_timer.0.tick(time.delta());
         }
     }
 }
 
-fn is_collision(position: &(i32, i32), shape: &[[bool; 4]; 4]) -> bool {
+fn is_collision(
+    position: &(i32, i32),
+    shape: &[[bool; 4]; 4],
+    grid: &Grid
+) -> bool {
     for y in 0..4 {
         for x in 0..4 {
             if shape[y][x] {
                 let new_x = position.0 + x as i32;
                 let new_y = position.1 - y as i32;
-                if new_x >= GRID_WIDTH as i32 || new_x < 0 || new_y < 0 {
+                if new_x >= GRID_WIDTH as i32 || new_x < 0 || new_y < 0 || new_y >= GRID_HEIGHT as i32 {
+                    return true;
+                } 
+                let index = get_vec_index_from_grid_coordinates(new_x, new_y);
+                if grid.cells[index] != CellState::Empty {
                     return true;
                 }
             }
@@ -328,25 +336,8 @@ fn is_collision(position: &(i32, i32), shape: &[[bool; 4]; 4]) -> bool {
     false
 }
 
-fn adjust_position(tetromino: &mut Tetromino) {
-    // Adjust position to prevent collision with left wall
-    while is_tetromino_hit_left_wall(tetromino) {
-        tetromino.position.0 += 1;
-    }
-
-    // Adjust position to prevent collision with right wall
-    while is_tetromino_hit_right_wall(tetromino) {
-        tetromino.position.0 -= 1;
-    }
-
-    // Adjust position to prevent collision with floor
-    while is_tetromino_hit_floor(tetromino) {
-        tetromino.position.1 += 1;
-    }
-}
-
-
-// Helpers
+// Helpers 
+// Grid wall collisions
 fn is_tetromino_hit_floor(tetromino: &Tetromino) -> bool{
     for y in 0..4 {
         for x in 0..4 {
@@ -384,4 +375,149 @@ fn is_tetromino_hit_right_wall(tetromino: &Tetromino) -> bool {
         }
     }
     return false;
+}
+
+// Grid collisions with other locked in pieces
+fn is_tetromino_hit_floor_piece(
+    tetromino: &Tetromino,
+    grid: &Grid
+) -> bool {
+    let start_x = tetromino.position.0;
+    let start_y = tetromino.position.1;
+
+    for y in 0..4 {
+        for x in 0..4 {
+            if tetromino.shape[y][x] {
+                let new_x = start_x + x as i32;
+                let new_y = start_y - y as i32;
+                // Calculating the cell below the tetromino to see if it's filled or not
+                let index = get_vec_index_from_grid_coordinates(new_x, new_y - 1);
+                if new_y > 0 && grid.cells[index] != CellState::Empty {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+fn is_tetromino_hit_left_piece(
+    tetromino: &Tetromino,
+    grid: &Grid
+) -> bool {
+    let start_x = tetromino.position.0;
+    let start_y = tetromino.position.1;
+
+    for y in 0..4 {
+        for x in 0..4 {
+            if tetromino.shape[y][x] {
+                let new_x = start_x + x as i32;
+                let new_y = start_y - y as i32;
+                // Calculating the cell to the left of the tetromino to see if it's filled or not
+                let index = get_vec_index_from_grid_coordinates(new_x as i32 - 1, new_y as i32);
+                if new_x > 0 && grid.cells[index] != CellState::Empty {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+fn is_tetromino_hit_right_piece(
+    tetromino: &Tetromino,
+    grid: &Grid
+) -> bool {
+    let start_x = tetromino.position.0;
+    let start_y = tetromino.position.1;
+
+    for y in 0..4 {
+        for x in 0..4 {
+            if tetromino.shape[y][x] {
+                let new_x = start_x + x as i32;
+                // Calculating the cell to the right of the tetromino to see if it's filled or not
+                let index = get_vec_index_from_grid_coordinates(new_x as i32 + 1, start_y - y as i32);
+                if new_x < GRID_WIDTH as i32 - 1 && grid.cells[index] != CellState::Empty {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+
+}
+
+// SRS
+fn get_kick_table_scenario(
+    letter: &TetrominoLetter,
+    from: &usize,
+    to: &usize
+) -> Vec<(i32, i32)> {
+    // These kick tables assume normal tetris where Y increases as you go down
+    // BUT we are using a coordinate system where Y decreases as you go down 
+    // So these kick tables are correct, but when we use them we have to invert 
+    match letter {
+        TetrominoLetter::J | TetrominoLetter::L | TetrominoLetter::S | TetrominoLetter::T | TetrominoLetter::Z => {
+            // JLSTZ pieces
+            match (from, to) {
+                (0, 1) => vec![(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+                (1, 2) => vec![(0,0), (1,0), (1,1), (0,-2), (1,-2)],
+                (2, 3) => vec![(0,0), (1,0), (1,-1), (0,2), (1,2)],
+                (3, 0) => vec![(0,0), (-1,0), (-1,-1), (0,2), (-1,2)],
+                (1, 0) => vec![(0,0), (1,0), (1,-1), (0,2), (1,2)],
+                (2, 1) => vec![(0,0), (-1,0), (-1,-1), (0,2), (-1,2)],
+                (3, 2) => vec![(0,0), (-1,0), (-1,1), (0,-2), (-1,-2)],
+                (0, 3) => vec![(0,0), (1,0), (1,1), (0,-2), (1,-2)],
+                _ => vec![],
+            }
+        }
+        TetrominoLetter::I => {
+            // I piece
+            match (from, to) {
+                (0, 1) => vec![(0,0), (-2,0), (1,0), (-2,-1), (1,2)],
+                (1, 2) => vec![(0,0), (-1,0), (2,0), (-1,2), (2,-1)],
+                (2, 3) => vec![(0,0), (2,0), (-1,0), (2,1), (-1,-2)],
+                (3, 0) => vec![(0,0), (1,0), (-2,0), (1,-2), (-2,1)],
+                (1, 0) => vec![(0,0), (2,0), (-1,0), (2,-1), (-1,2)],
+                (2, 1) => vec![(0,0), (1,0), (-2,0), (1,2), (-2,-1)],
+                (3, 2) => vec![(0,0), (-2,0), (1,0), (-2,-1), (1,2)],
+                (0, 3) => vec![(0,0), (-1,0), (2,0), (-1,2), (2,-1)],
+                _ => vec![],
+            }
+        }
+        TetrominoLetter::O => {
+            // O piece
+            // No kick table needed
+            vec![]
+        }
+    }
+}
+
+fn maybe_try_kicks(
+    tetromino: &Tetromino,
+    kick_table: &Vec<(i32, i32)>,
+    grid: &Grid,
+    shape: &[[bool; 4]; 4],
+) -> Option<(i32, i32)> {
+    // Rotate your local 4x4 grid.
+    // You apply each offset from the kick table in order:
+    // For each, check: does this new position collide or go out of bounds?
+    // If yes, try next kick
+    // If no, accept offset
+    let current_position_x = tetromino.position.0;
+    let current_position_y = tetromino.position.1;
+
+    for (dx, dy) in kick_table.iter() {
+        // Inverting the Y value of the kick table to match our coordinate system
+        let real_dy = -dy;
+        let new_x = current_position_x + dx;
+        let new_y = current_position_y - real_dy;
+        // Is there a collision on the walls?
+        if is_collision(&(new_x, new_y), shape, grid) {
+            continue; // Out of bounds
+        }
+        // If we reach here, we have a valid position
+        return Some((*dx, real_dy));
+    }
+    None
 }

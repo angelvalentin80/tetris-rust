@@ -10,6 +10,12 @@ pub const CELL_BORDER_WIDTH: f32 = 2.0;
 pub struct Grid{
     pub cells: Vec<CellState>, 
 }
+impl Grid {
+    pub fn new() -> Self {
+        let cells = vec![CellState::Empty; GRID_WIDTH * GRID_HEIGHT];
+        Grid { cells }
+    }
+}
 
 #[derive(Component)]
 pub struct GridCell;
@@ -20,14 +26,7 @@ pub struct GridConfig {
     pub start_y: f32,
 }
 
-impl Grid {
-    pub fn new() -> Self {
-        let cells = vec![CellState::Empty; GRID_WIDTH * GRID_HEIGHT];
-        Grid { cells }
-    }
-}
-
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, PartialEq)]
 pub enum CellState {
     Empty,
     Filled(Color),
@@ -80,4 +79,9 @@ pub fn redraw_grid(
 
         draw_grid(commands, grid, grid_config, materials, meshes);
     }
+}
+
+// Helpers
+pub fn get_vec_index_from_grid_coordinates(x: i32, y: i32) -> usize {
+    (y * GRID_WIDTH as i32 + x) as usize
 }
