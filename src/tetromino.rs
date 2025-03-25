@@ -83,7 +83,7 @@ impl Tetromino {
     }
 }
 
-#[derive(Clone, Debug)] // TODO remove debug??
+#[derive(Clone, Debug, PartialEq)] // TODO remove debug??
 pub enum TetrominoLetter {
     I,
     J,
@@ -223,7 +223,7 @@ pub fn move_tetromino(
         }
 
         // Rotate Clockwise
-        if keyboard_input.just_pressed(KeyCode::ArrowUp) {
+        if keyboard_input.just_pressed(KeyCode::ArrowUp) && tetromino.letter != TetrominoLetter::O {
             let new_shape = tetromino.rotate_tetromino_shape_clockwise();
             if !is_collision(&tetromino.position, &new_shape, &grid) {
                 // If new shape has no collision, rotate normally 
@@ -251,7 +251,7 @@ pub fn move_tetromino(
         }
 
         // Rotate Counter Clockwise 
-        if keyboard_input.just_pressed(KeyCode::ControlLeft) {
+        if keyboard_input.just_pressed(KeyCode::ControlLeft) && tetromino.letter != TetrominoLetter::O {
             let new_shape = tetromino.rotate_tetromino_shape_counter_clockwise();
             if !is_collision(&tetromino.position, &new_shape, &grid) {
                 // If new shape has no collision, rotate normally 
