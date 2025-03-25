@@ -278,6 +278,15 @@ pub fn move_tetromino(
             }
             lock_in_timer.0.reset(); // Reset the lock-in timer when rotating
         }
+
+        // Hard Drop
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            while !is_tetromino_hit_floor(&tetromino) && !is_tetromino_hit_floor_piece(&tetromino, &grid) {
+                tetromino.position.1 -= 1;
+            }
+            commands.entity(entity).insert(NeedsRedraw {});
+            lock_in_timer.0.reset(); // Reset the lock-in timer when hard dropping
+        }
     }
 }
 
