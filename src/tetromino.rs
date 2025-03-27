@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::grid::{GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_WIDTH, Grid, get_vec_index_from_grid_coordinates, CellState, GRID_HEIGHT};
+use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 
 #[derive(Component, Clone)]
@@ -55,7 +55,7 @@ impl Tetromino {
         };
         Self {
             shape,
-            position: (3 , 16), // Spawn position // TODO make this above the grid probably when you have implemented the hidden grid
+            position: (3 , 21), // Spawn position
             rotation: 0,
             color,
             letter
@@ -346,7 +346,7 @@ fn is_collision(
             if shape[y][x] {
                 let new_x = position.0 + x as i32;
                 let new_y = position.1 - y as i32;
-                if new_x >= GRID_WIDTH as i32 || new_x < 0 || new_y < 0 || new_y >= GRID_HEIGHT as i32 {
+                if new_x >= GRID_WIDTH as i32 || new_x < 0 || new_y < 0 || new_y >= GRID_HEIGHT as i32 + GRID_HIDDEN_HEIGHT as i32 {
                     return true;
                 } 
                 let index = get_vec_index_from_grid_coordinates(new_x, new_y);
