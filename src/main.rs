@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::grid::{draw_grid, Grid, GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, CELL_BORDER_WIDTH, RedrawGridEvent, redraw_grid};
+use crate::grid::{draw_grid, Grid, GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, CELL_BORDER_WIDTH, RedrawGridEvent, redraw_grid, CheckForLinesEvent, check_for_lines};
 use crate::tetromino::{draw_tetromino, move_tetromino, detect_lock_position, spawn_tetromino, gravity, SpawnTetrominoEvent, draw_ghost_piece, RedrawGhostCellsEvent};
 use crate::systems::lock_in_tetromino;
 use crate::resources::{GravityTimer, LockInTimer, TetrominoQueue, GameState};
@@ -22,6 +22,7 @@ fn main() {
         .add_event::<GameStartEvent>()
         .add_event::<SpawnTetrominoEvent>()
         .add_event::<RedrawGhostCellsEvent>()
+        .add_event::<CheckForLinesEvent>()
         // Systems
         .add_systems(Startup, 
             (
@@ -40,7 +41,8 @@ fn main() {
                 spawn_tetromino,
                 detect_bag_low,
                 shuffle_tetrominoes_into_queue,
-                draw_ghost_piece
+                draw_ghost_piece,
+                check_for_lines
             ))
         .run();
 }
