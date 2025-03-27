@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::grid::{Grid, CellState, RedrawGridEvent, get_vec_index_from_grid_coordinates, CheckForLinesEvent};
-use crate::tetromino::{Active, SpawnTetrominoEvent, Tetromino, TetrominoCell, GhostCell, RedrawGhostCellsEvent};
+use crate::tetromino::{Active, GhostCell, LockInTetrominoEvent, RedrawGhostCellsEvent, SpawnTetrominoEvent, Tetromino, TetrominoCell};
 use crate::resources::LockInTimer;
 
 pub fn lock_in_tetromino(
@@ -13,41 +13,45 @@ pub fn lock_in_tetromino(
     tetromino_cell_query: Query<(Entity, &TetrominoCell)>,
     ghost_cell_query: Query<(Entity, &GhostCell)>,
     mut redraw_ghost_cells_event: EventReader<RedrawGhostCellsEvent>, 
-    mut check_for_lines_event: EventWriter<CheckForLinesEvent>
+    mut check_for_lines_event: EventWriter<CheckForLinesEvent>,
+    mut lock_in_tetromino_event: EventReader<LockInTetrominoEvent>
 ) {
-    if lock_in_timer.0.just_finished() {
-        for (entity, tetromino) in tetromino_query.iter() {
-            // Lock in the tetromino by updating the grid state
-            let start_x = tetromino.position.0;
-            let start_y = tetromino.position.1;
+    if !lock_in_tetromino_event.is_empty(){
+        lock_in_tetromino_event.clear();
+        if lock_in_timer.0.finished() {
+            for (entity, tetromino) in tetromino_query.iter() {
+                // Lock in the tetromino by updating the grid state
+                let start_x = tetromino.position.0;
+                let start_y = tetromino.position.1;
 
-            for y in 0..4 {
-                for x in 0..4 {
-                    if tetromino.shape[y][x] {
-                        let index = get_vec_index_from_grid_coordinates(start_x + x as i32, start_y - y as i32);
-                        grid.cells[index] = CellState::Filled(tetromino.color);
+                for y in 0..4 {
+                    for x in 0..4 {
+                        if tetromino.shape[y][x] {
+                            let index = get_vec_index_from_grid_coordinates(start_x + x as i32, start_y - y as i32);
+                            grid.cells[index] = CellState::Filled(tetromino.color);
+                        }
                     }
                 }
-            }
-            
-            commands.entity(entity).remove::<Active>();
-            commands.entity(entity).despawn();
-        }
 
-        for (entity, _) in tetromino_cell_query.iter() {
-            commands.entity(entity).despawn();
-        }
-
-        if !redraw_ghost_cells_event.is_empty() {
-            redraw_ghost_cells_event.clear();
-            for (entity, _) in ghost_cell_query.iter() {
+                commands.entity(entity).remove::<Active>();
                 commands.entity(entity).despawn();
             }
-        }
 
-        check_for_lines_event.send(CheckForLinesEvent);
-        redraw_grid_event.send(RedrawGridEvent);
-        spawn_tetromino_event.send(SpawnTetrominoEvent);
-        lock_in_timer.0.reset();
-    }
+            for (entity, _) in tetromino_cell_query.iter() {
+                commands.entity(entity).despawn();
+            }
+
+            if !redraw_ghost_cells_event.is_empty() {
+                redraw_ghost_cells_event.clear();
+                for (entity, _) in ghost_cell_query.iter() {
+                    commands.entity(entity).despawn();
+                }
+            }
+
+            check_for_lines_event.send(CheckForLinesEvent);
+            redraw_grid_event.send(RedrawGridEvent);
+            spawn_tetromino_event.send(SpawnTetrominoEvent);
+            lock_in_timer.0.reset();
+        }
+    } 
 }

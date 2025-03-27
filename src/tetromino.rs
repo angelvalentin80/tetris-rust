@@ -128,6 +128,9 @@ pub struct NeedsRedraw();
 #[derive(Event)]
 pub struct SpawnTetrominoEvent;
 
+#[derive(Event)]
+pub struct LockInTetrominoEvent;
+
 pub fn spawn_tetromino(
     mut commands: Commands,
     mut tetromino_queue: ResMut<TetrominoQueue>,
@@ -304,7 +307,7 @@ pub fn gravity(
     time: Res<Time>,
     grid: Res<Grid>,
     mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
-    mut gravity_timer: ResMut<GravityTimer>,
+    mut gravity_timer: ResMut<GravityTimer>
 ) {
     gravity_timer.0.tick(time.delta());
     if gravity_timer.0.just_finished() {
@@ -323,10 +326,12 @@ pub fn detect_lock_position(
     time: Res<Time>,
     grid: Res<Grid>,
     tetromino_query: Query<&Tetromino, With<Active>>,
+    mut lock_in_tetromino_event: EventWriter<LockInTetrominoEvent>,
 ) {
     for tetromino in tetromino_query.iter() {
         if is_tetromino_hit_floor(&tetromino) || is_tetromino_hit_floor_piece(&tetromino, &grid) {
             lock_in_timer.0.tick(time.delta());
+            lock_in_tetromino_event.send(LockInTetrominoEvent);
         }
     }
 }
