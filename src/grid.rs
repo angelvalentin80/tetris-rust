@@ -1,7 +1,8 @@
 use bevy::{prelude::*, render::render_resource::encase::private::Length};
 
 pub const GRID_WIDTH: usize = 10;
-pub const GRID_HEIGHT: usize = 20;
+pub const GRID_HEIGHT: usize = 20; 
+pub const GRID_HIDDEN_HEIGHT: usize = 6; // Every row above 20 is hidden
 pub const GRID_CELL_SIZE: f32 = 40.0;
 pub const CELL_BORDER_WIDTH: f32 = 2.0;
 
@@ -12,7 +13,7 @@ pub struct Grid{
 }
 impl Grid {
     pub fn new() -> Self {
-        let cells = vec![CellState::Empty; GRID_WIDTH * GRID_HEIGHT];
+        let cells = vec![CellState::Empty; GRID_WIDTH * (GRID_HEIGHT + GRID_HIDDEN_HEIGHT)];
         Grid { cells }
     }
 }
@@ -35,8 +36,14 @@ pub enum CellState {
 #[derive(Event)]
 pub struct RedrawGridEvent;
 
-pub fn draw_grid(mut commands: Commands, grid: Res<Grid>, grid_config: Res<GridConfig>, mut materials: ResMut<Assets<ColorMaterial>>, mut meshes: ResMut<Assets<Mesh>>) {
-    for y in 0..GRID_HEIGHT {
+pub fn draw_grid(
+    mut commands: Commands,
+    grid: Res<Grid>, 
+    grid_config: Res<GridConfig>, 
+    mut materials: ResMut<Assets<ColorMaterial>>, 
+    mut meshes: ResMut<Assets<Mesh>>
+) {
+    for y in 0..GRID_HEIGHT + GRID_HIDDEN_HEIGHT {
         for x in 0..GRID_WIDTH {
             let index = y * GRID_WIDTH + x;
             let color = match &grid.cells[index] {
@@ -47,15 +54,17 @@ pub fn draw_grid(mut commands: Commands, grid: Res<Grid>, grid_config: Res<GridC
             let cell_x = grid_config.start_x + x as f32 * GRID_CELL_SIZE;
             let cell_y = grid_config.start_y + y as f32 * GRID_CELL_SIZE;
 
-            // Draw the cell
-            commands.spawn((
-                Mesh2d(meshes.add(Rectangle::default())),
-                MeshMaterial2d(materials.add(color)),
-                Transform::from_xyz(cell_x, cell_y, -20.0)
-                    .with_scale(Vec3::new(GRID_CELL_SIZE - CELL_BORDER_WIDTH, GRID_CELL_SIZE - CELL_BORDER_WIDTH, 1.0)),
-                GridCell {},
-            ));
-            
+            // Don't draw the hidden cells
+            if y < GRID_HEIGHT {
+                // Draw the cell
+                commands.spawn((
+                    Mesh2d(meshes.add(Rectangle::default())),
+                    MeshMaterial2d(materials.add(color)),
+                    Transform::from_xyz(cell_x, cell_y, -69.0)
+                        .with_scale(Vec3::new(GRID_CELL_SIZE - CELL_BORDER_WIDTH, GRID_CELL_SIZE - CELL_BORDER_WIDTH, 1.0)),
+                    GridCell {},
+                ));
+            }
         }
     }
 }
