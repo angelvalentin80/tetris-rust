@@ -8,7 +8,7 @@ pub struct GameStartEvent;
 pub fn detect_start_game(
     mut game_start_event: EventWriter<GameStartEvent>,
     mut game_state: ResMut<GameState>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>
 ) {
     // Detect if I press enter key
     if !game_state.started {
@@ -16,7 +16,6 @@ pub fn detect_start_game(
             // Send the game start event
             game_start_event.send(GameStartEvent);
             game_state.started = true;
-            info!("Game started!"); //TODO testing
         }
     }
 }

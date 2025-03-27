@@ -30,7 +30,11 @@ pub fn shuffle_tetrominoes_into_queue(
         ];
 
         tetrominoes.shuffle(&mut thread_rng());
-        tetromino_queue.queue.extend(tetrominoes);
+
+        for letter in tetrominoes {
+            tetromino_queue.queue.push_back(letter);
+        }
+
         if !game_start_event.is_empty() {
             spawn_tetromino_event.send(SpawnTetrominoEvent);
         }
