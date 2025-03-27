@@ -128,6 +128,9 @@ pub struct NeedsRedraw();
 #[derive(Event)]
 pub struct SpawnTetrominoEvent;
 
+#[derive(Event)]
+pub struct LockInTetrominoEvent;
+
 pub fn spawn_tetromino(
     mut commands: Commands,
     mut tetromino_queue: ResMut<TetrominoQueue>,
@@ -191,7 +194,8 @@ pub fn move_tetromino(
     mut lock_in_timer: ResMut<LockInTimer>,
     mut gravity_timer: ResMut<GravityTimer>,
     grid: Res<Grid>,
-    keyboard_input: Res<ButtonInput<KeyCode>>
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut redraw_ghost_cells_event: EventWriter<RedrawGhostCellsEvent>,
 ) {
     for (entity, mut tetromino) in tetromino.iter_mut() {
 
@@ -200,6 +204,7 @@ pub fn move_tetromino(
             if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
                 tetromino.position.0 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
+                redraw_ghost_cells_event.send(RedrawGhostCellsEvent);
                 lock_in_timer.0.reset(); // Reset the lock-in timer when moving left
             } 
         }
@@ -209,6 +214,7 @@ pub fn move_tetromino(
             if keyboard_input.just_pressed(KeyCode::ArrowRight) {
                 tetromino.position.0 += 1;
                 commands.entity(entity).insert(NeedsRedraw {});
+                redraw_ghost_cells_event.send(RedrawGhostCellsEvent);
                 lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
             } 
         }
@@ -219,6 +225,7 @@ pub fn move_tetromino(
                 tetromino.position.1 -= 1;
                 commands.entity(entity).insert(NeedsRedraw {});
                 gravity_timer.0.reset();
+                lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
             }
         }
 
@@ -230,6 +237,7 @@ pub fn move_tetromino(
                 tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino
                 tetromino.shape = new_shape; // Rotate the shape
                 commands.entity(entity).insert(NeedsRedraw {});
+                redraw_ghost_cells_event.send(RedrawGhostCellsEvent);
             } else {
                 // Adjust position using SRS 
                 let from_rotation = &tetromino.rotation;
@@ -242,6 +250,7 @@ pub fn move_tetromino(
                     tetromino.rotation = (tetromino.rotation + 1) % 4; // Rotate the tetromino clockwise
                     tetromino.shape = new_shape; // Rotate the shape
                     commands.entity(entity).insert(NeedsRedraw {});
+                    redraw_ghost_cells_event.send(RedrawGhostCellsEvent);
                 } else {
                     // If no valid kick found, do nothing
                     return;
@@ -258,6 +267,7 @@ pub fn move_tetromino(
                 tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
                 tetromino.shape = new_shape; // Rotate the shape
                 commands.entity(entity).insert(NeedsRedraw {});
+                redraw_ghost_cells_event.send(RedrawGhostCellsEvent);
             } else {
                 // Adjust position using SRS 
                 let from_rotation = &tetromino.rotation;
@@ -271,12 +281,23 @@ pub fn move_tetromino(
                     tetromino.rotation = (tetromino.rotation + 3) % 4; // Rotate the tetromino counter-clockwise
                     tetromino.shape = new_shape; // Rotate the shape
                     commands.entity(entity).insert(NeedsRedraw {});
+                    redraw_ghost_cells_event.send(RedrawGhostCellsEvent);
                 } else {
                     // If no valid kick found, do nothing
                     return;
                 }
             }
             lock_in_timer.0.reset(); // Reset the lock-in timer when rotating
+        }
+
+        // Hard Drop
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            while !is_tetromino_hit_floor(&tetromino) && !is_tetromino_hit_floor_piece(&tetromino, &grid) {
+                tetromino.position.1 -= 1;
+            }
+            commands.entity(entity).insert(NeedsRedraw {});
+            lock_in_timer.0.reset(); // Reset the lock-in timer when hard dropping
+            gravity_timer.0.reset();
         }
     }
 }
@@ -286,7 +307,7 @@ pub fn gravity(
     time: Res<Time>,
     grid: Res<Grid>,
     mut tetromino: Query<(Entity, &mut Tetromino), With<Active>>,
-    mut gravity_timer: ResMut<GravityTimer>,
+    mut gravity_timer: ResMut<GravityTimer>
 ) {
     gravity_timer.0.tick(time.delta());
     if gravity_timer.0.just_finished() {
@@ -305,10 +326,12 @@ pub fn detect_lock_position(
     time: Res<Time>,
     grid: Res<Grid>,
     tetromino_query: Query<&Tetromino, With<Active>>,
+    mut lock_in_tetromino_event: EventWriter<LockInTetrominoEvent>,
 ) {
     for tetromino in tetromino_query.iter() {
         if is_tetromino_hit_floor(&tetromino) || is_tetromino_hit_floor_piece(&tetromino, &grid) {
             lock_in_timer.0.tick(time.delta());
+            lock_in_tetromino_event.send(LockInTetrominoEvent);
         }
     }
 }
@@ -520,4 +543,54 @@ fn maybe_try_kicks(
         return Some((*dx, real_dy));
     }
     None
+}
+
+// Ghost Piece
+#[derive(Component)]
+pub struct GhostCell {}
+
+#[derive(Event)]
+pub struct RedrawGhostCellsEvent;
+
+pub fn draw_ghost_piece(
+    mut commands: Commands,
+    tetromino: Query<&Tetromino, With<Active>>,
+    ghost_cells_query: Query<(Entity, &GhostCell)>,
+    grid: Res<Grid>,
+    grid_config: Res<GridConfig>,
+    mut materials: ResMut<Assets<ColorMaterial>>, 
+    mut meshes: ResMut<Assets<Mesh>>
+){
+    if !ghost_cells_query.is_empty() {
+        for (entity, _) in ghost_cells_query.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+
+    for tetromino in tetromino.iter() {
+        let mut ghost_tetromino = tetromino.clone();
+        while !is_tetromino_hit_floor(&ghost_tetromino) && !is_tetromino_hit_floor_piece(&ghost_tetromino, &grid) {
+            ghost_tetromino.position.1 -= 1;
+        }
+        for y in 0..4 {
+            for x in 0..4 {
+                if ghost_tetromino.shape[y][x] {
+                    let cell_x = grid_config.start_x + (ghost_tetromino.position.0 + x as i32) as f32 * GRID_CELL_SIZE;
+                    let cell_y = grid_config.start_y + (ghost_tetromino.position.1 - y as i32) as f32 * GRID_CELL_SIZE;
+
+                    // Draw the cells
+                    if !is_tetromino_hit_floor(tetromino) && !is_tetromino_hit_floor_piece(tetromino, &grid) {
+                        commands.spawn((
+                            Mesh2d(meshes.add(Rectangle::default())),
+                            MeshMaterial2d(materials.add(Color::srgba(1.0, 1.0, 1.0, 0.2))), // Make the ghost piece transparent
+                            Transform::from_xyz(cell_x, cell_y, 0.0)
+                                .with_scale(Vec3::new(GRID_CELL_SIZE - CELL_BORDER_WIDTH, GRID_CELL_SIZE - CELL_BORDER_WIDTH, 1.0)),
+                            GhostCell {},
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
 }

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::render_resource::encase::private::Length};
 
 pub const GRID_WIDTH: usize = 10;
 pub const GRID_HEIGHT: usize = 20;
@@ -26,7 +26,7 @@ pub struct GridConfig {
     pub start_y: f32,
 }
 
-#[derive(Resource, Clone, PartialEq)]
+#[derive(Resource, Clone, PartialEq, Debug, Copy)]
 pub enum CellState {
     Empty,
     Filled(Color),
@@ -81,7 +81,51 @@ pub fn redraw_grid(
     }
 }
 
+// Checking for lines
+#[derive(Event)]
+pub struct CheckForLinesEvent;
+
+pub fn check_for_lines(
+    mut grid: ResMut<Grid>,
+    mut check_for_lines_event: EventReader<CheckForLinesEvent>,
+    mut redraw_grid_event: EventWriter<RedrawGridEvent>
+) {
+    // Figure out if any or some lines have been achieved on a 1D vector of CellStates 
+    if !check_for_lines_event.is_empty(){
+        check_for_lines_event.clear();
+        let mut index_of_rows_filled: Vec<(usize, usize)> = vec![];
+        let mut slice_start = 0;
+        let mut slice_end = 10;
+        for _ in 0..grid.cells.length() / 10{
+            let row: &[CellState] = &grid.cells[slice_start..slice_end];
+
+            if is_all_row_filled(row){
+                index_of_rows_filled.push((slice_start, slice_end));
+            }
+            slice_start += 10;
+            slice_end += 10;
+        }
+
+        // If there is a row that has been filled, drain them reversal style
+        if !index_of_rows_filled.is_empty() {
+            for row in index_of_rows_filled.iter().rev(){
+                grid.cells.drain(row.0..row.1);
+            }
+
+            for _ in 0..index_of_rows_filled.len() * 10{
+                grid.cells.push(CellState::Empty);
+            }
+            redraw_grid_event.send(RedrawGridEvent);
+        }
+    }
+}
+
+
 // Helpers
+fn is_all_row_filled(cells: &[CellState]) -> bool {
+    return cells.iter().all(|cell| matches!(cell, CellState::Filled(_)));
+}
+
 pub fn get_vec_index_from_grid_coordinates(x: i32, y: i32) -> usize {
     (y * GRID_WIDTH as i32 + x) as usize
 }
