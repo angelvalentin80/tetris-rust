@@ -1,10 +1,11 @@
 use bevy::prelude::*;
-use crate::grid::{draw_grid, Grid, GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, CELL_BORDER_WIDTH, RedrawGridEvent, redraw_grid, CheckForLinesEvent, check_for_lines};
-use crate::tetromino::{draw_tetromino, move_tetromino, detect_lock_position, spawn_tetromino, gravity, SpawnTetrominoEvent, draw_ghost_piece, RedrawGhostCellsEvent, LockInTetrominoEvent};
+use std::collections::VecDeque;
+use crate::grid::{draw_grid, Grid, GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT, CELL_BORDER_WIDTH, RedrawGridEvent, redraw_grid, CheckForLinesEvent, check_for_lines, reset_grid};
+use crate::tetromino::{draw_tetromino, move_tetromino, detect_lock_position, spawn_tetromino, gravity, SpawnTetrominoEvent, draw_ghost_piece, RedrawGhostCellsEvent, LockInTetrominoEvent, draw_next_piece_text, draw_next_piece, spawn_next_piece, SpawnNextPieceEvent, despawn_active_tetromino, despawn_next_piece};
 use crate::systems::lock_in_tetromino;
 use crate::resources::{GravityTimer, LockInTimer, TetrominoQueue, GameState};
-use crate::queue::{shuffle_tetrominoes_into_queue, detect_bag_low, BagLowEvent};
-use crate::game_manager::{GameStartEvent, detect_start_game};
+use crate::queue::{shuffle_tetrominoes_into_queue, detect_bag_low, BagLowEvent, restart_queue};
+use crate::game_manager::{GameStartEvent, detect_start_game, detect_restart_game, GameRestartEvent};
 
 mod grid;
 mod tetromino;
@@ -24,6 +25,8 @@ fn main() {
         .add_event::<RedrawGhostCellsEvent>()
         .add_event::<CheckForLinesEvent>()
         .add_event::<LockInTetrominoEvent>()
+        .add_event::<SpawnNextPieceEvent>()
+        .add_event::<GameRestartEvent>()
         // Systems
         .add_systems(Startup, 
             (
@@ -33,18 +36,26 @@ fn main() {
         .add_systems(Update, 
             (
                 detect_start_game,
+                redraw_grid, 
+                shuffle_tetrominoes_into_queue,
+                spawn_tetromino,
+                draw_tetromino, 
+                draw_ghost_piece,
+                draw_next_piece_text,
+                spawn_next_piece,
+                draw_next_piece,
                 gravity, 
                 lock_in_tetromino, 
                 move_tetromino, 
-                draw_tetromino, 
                 detect_lock_position, 
-                redraw_grid, 
-                spawn_tetromino,
                 detect_bag_low,
-                shuffle_tetrominoes_into_queue,
-                draw_ghost_piece,
-                check_for_lines
-            ))
+                check_for_lines,
+                restart_queue,
+                detect_restart_game,
+                despawn_active_tetromino,
+                reset_grid,
+                despawn_next_piece
+            ).chain())
         .run();
 }
 
@@ -71,5 +82,5 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(lock_in_timer);
 
     // Add our tetromino queue resource
-    commands.insert_resource(TetrominoQueue{queue: vec![]});
+    commands.insert_resource(TetrominoQueue{queue: VecDeque::new()});
 }

@@ -1,5 +1,7 @@
 use bevy::{prelude::*, render::render_resource::encase::private::Length};
 
+use crate::game_manager::GameRestartEvent;
+
 pub const GRID_WIDTH: usize = 10;
 pub const GRID_HEIGHT: usize = 20; 
 pub const GRID_HIDDEN_HEIGHT: usize = 6; // Every row above 20 is hidden
@@ -87,6 +89,23 @@ pub fn redraw_grid(
         }
 
         draw_grid(commands, grid, grid_config, materials, meshes);
+    }
+}
+
+pub fn reset_grid(
+    mut commands: Commands,
+    mut redraw_grid_event: EventWriter<RedrawGridEvent>,
+    mut game_restart_event: EventReader<GameRestartEvent>
+){
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+
+        // Change the grid to be all empty by replacing the resource
+        commands.remove_resource::<Grid>();
+        commands.insert_resource(Grid::new());
+
+        // Send redraw grid event
+        redraw_grid_event.send(RedrawGridEvent);
     }
 }
 

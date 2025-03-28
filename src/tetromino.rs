@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::game_manager::{GameRestartEvent, GameStartEvent};
 use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 
@@ -83,7 +84,7 @@ impl Tetromino {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)] // TODO remove debug??
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum TetrominoLetter {
     I,
     J,
@@ -140,7 +141,7 @@ pub fn spawn_tetromino(
         spawn_tetromino_event.clear();
 
         commands.spawn((
-            Tetromino::create_tetromino(tetromino_queue.queue.pop().unwrap()),
+            Tetromino::create_tetromino(tetromino_queue.queue.pop_front().unwrap()),
             Active {},
             NeedsRedraw {}
         ));
@@ -185,6 +186,24 @@ pub fn draw_tetromino(
             }
         }
         commands.entity(entity).remove::<NeedsRedraw>(); // Remove the NeedsRedraw component after drawing 
+    }
+}
+
+pub fn despawn_active_tetromino(
+    mut commands: Commands,
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    tetromino_query: Query<(Entity, &Tetromino), With<Active>>,
+    tetromino_cell_query: Query<(Entity, &TetrominoCell)>,
+){
+    // Despawn the active tetromino, and the tetromino cells
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+        for (entity, _) in tetromino_query.iter(){
+            commands.entity(entity).despawn();
+        }
+        for (entity, _) in tetromino_cell_query.iter(){
+            commands.entity(entity).despawn();
+        }
     }
 }
 
@@ -593,4 +612,124 @@ pub fn draw_ghost_piece(
         }
     }
 
+}
+
+// Next Tetromino Piece
+#[derive(Component)]
+pub struct NextTetrominoPieceText;
+
+pub fn draw_next_piece_text(
+    mut commands: Commands,
+    grid_config: Res<GridConfig>,
+    mut game_start_event: EventReader<GameStartEvent>
+){
+    if !game_start_event.is_empty(){
+        game_start_event.clear();
+        let text_font = TextFont {
+            font_size: 25.0,
+            ..default()
+        };
+
+        let text_x = (grid_config.start_x + (GRID_WIDTH as f32 * GRID_CELL_SIZE)) + 100.0;
+        let text_y = grid_config.start_y + (GRID_HEIGHT as f32 * GRID_CELL_SIZE) - 25.0;
+
+        commands.spawn((
+            Text2d::new("Next Piece"),
+            text_font.clone(),
+            TextLayout::new_with_justify(JustifyText::Right),
+            Transform::from_xyz(text_x, text_y, 0.0),
+            NextTetrominoPieceText {}
+        ));
+    }
+} 
+
+#[derive(Component)]
+pub struct NextPiece;
+
+#[derive(Component)]
+pub struct NextPieceCells;
+
+#[derive(Event)]
+pub struct SpawnNextPieceEvent;
+
+pub fn spawn_next_piece(
+    mut commands: Commands,
+    tetromino_queue: Res<TetrominoQueue>,
+    mut game_start_event: EventReader<GameStartEvent>,
+    next_piece_query: Query<(Entity, &NextPiece)>,
+    next_piece_cell_query: Query<(Entity, &NextPieceCells)>,
+    mut spawn_next_piece_event: EventReader<SpawnNextPieceEvent>
+){
+    if !game_start_event.is_empty() || !spawn_next_piece_event.is_empty(){
+
+        for (entity, _) in next_piece_query.iter(){
+            commands.entity(entity).despawn();
+        }
+        for (entity, _) in next_piece_cell_query.iter(){
+            commands.entity(entity).despawn()
+        }
+
+        game_start_event.clear();
+        spawn_next_piece_event.clear();
+
+        if let Some(&upcoming_piece) = tetromino_queue.queue.front() {
+            // Spawn "NextPiece" Entity
+            commands.spawn((
+                Tetromino::create_tetromino(upcoming_piece),
+                NextPiece {},
+                NeedsRedraw{}
+            ));
+        };
+    }
+}
+pub fn draw_next_piece(
+    mut commands: Commands,
+    next_piece_tetromino_query: Query<(Entity, &Tetromino), (With<NextPiece>, With<NeedsRedraw>)>,
+    mut materials: ResMut<Assets<ColorMaterial>>, 
+    mut meshes: ResMut<Assets<Mesh>>,
+    grid_config: Res<GridConfig>,
+){
+    for (entity, next_piece) in next_piece_tetromino_query.iter(){
+        // Draw new entities
+        let initial_x = (grid_config.start_x + (GRID_WIDTH as f32 * GRID_CELL_SIZE)) + 50.0;
+        let initial_y = grid_config.start_y + (GRID_HEIGHT as f32 * GRID_CELL_SIZE) - 100.0;
+        for y in 0..4 {
+            for x in 0..4 {
+                if next_piece.shape[y][x] {
+                    let cell_x = initial_x + (x as f32 * GRID_CELL_SIZE);
+                    let cell_y = initial_y + (y as f32 * GRID_CELL_SIZE);
+
+                    // Draw the next piece 
+                    commands.spawn((
+                        Mesh2d(meshes.add(Rectangle::default())),
+                        MeshMaterial2d(materials.add(next_piece.color)),
+                        Transform::from_xyz(cell_x, cell_y, 0.0)
+                            .with_scale(Vec3::new(GRID_CELL_SIZE - CELL_BORDER_WIDTH, GRID_CELL_SIZE - CELL_BORDER_WIDTH, 1.0)),
+                        NextPieceCells{}
+                    ));
+                }
+            }
+        }
+        commands.entity(entity).remove::<NeedsRedraw>(); // Remove the NeedsRedraw component after drawing 
+    }
+}
+
+pub fn despawn_next_piece(
+    mut commands: Commands, 
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    next_piece_query: Query<(Entity, &NextPiece)>,
+    next_piece_cells_query: Query<(Entity, &NextPieceCells)>,
+
+){
+    // Despawn the next piece and its cells
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+
+        for (entity, _) in next_piece_query.iter(){
+            commands.entity(entity).despawn();
+        }
+        for (entity, _) in next_piece_cells_query.iter(){
+            commands.entity(entity).despawn();
+        }
+    }
 }
