@@ -19,3 +19,19 @@ pub fn detect_start_game(
         }
     }
 }
+
+#[derive(Event)]
+pub struct GameRestartEvent;
+
+pub fn detect_restart_game(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut game_state: ResMut<GameState>,
+    mut game_restart_event: EventWriter<GameRestartEvent> 
+){
+    // Send GameRestartEvent
+    if keyboard_input.just_pressed(KeyCode::KeyR) {
+        game_state.started = false;
+        game_restart_event.send(GameRestartEvent);
+        // TODO Reset scoring and levels when we get to that point
+    }
+}

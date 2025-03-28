@@ -3,7 +3,7 @@ use rand::thread_rng;
 use rand::seq::SliceRandom;
 use crate::tetromino::{TetrominoLetter, SpawnTetrominoEvent};
 use crate::resources::TetrominoQueue;
-use crate::game_manager::GameStartEvent;
+use crate::game_manager::{GameRestartEvent, GameStartEvent};
 
 #[derive(Event)]
 pub struct BagLowEvent;
@@ -48,5 +48,16 @@ pub fn detect_bag_low(
 ) {
     if tetromino_queue.queue.len() == 1 {
         bag_low_event.send(BagLowEvent);
+    }
+}
+
+pub fn restart_queue(
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    mut tetromino_queue: ResMut<TetrominoQueue>,
+) {
+    // When game restart event is sent, clear queue 
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+        tetromino_queue.queue.clear();
     }
 }
