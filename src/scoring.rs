@@ -15,6 +15,8 @@ pub struct ScoringText {}
 #[derive(Event)]
 pub struct RedrawLevelAndScoreEvent;
 
+#[derive(Event)]
+pub struct LevelUpEvent;
 
 pub fn draw_level_and_score(
     mut commands: Commands,
@@ -22,7 +24,8 @@ pub fn draw_level_and_score(
     grid_config: Res<GridConfig>,
     mut redraw_level_and_score_event: EventReader<RedrawLevelAndScoreEvent>,
     mut game_start_event: EventReader<GameStartEvent>,
-    scoring_text_query: Query<(Entity, &ScoringText)> 
+    scoring_text_query: Query<(Entity, &ScoringText)>,
+    mut level_up_event: EventWriter<LevelUpEvent> 
 ){
     if !redraw_level_and_score_event.is_empty() || !game_start_event.is_empty(){
         redraw_level_and_score_event.clear();
@@ -33,7 +36,11 @@ pub fn draw_level_and_score(
         }
 
         // Calculate level
+        let old_level = scoring_resource.level;
         scoring_resource.level = calculate_level(&scoring_resource.lines_cleared);
+        if old_level < scoring_resource.level{
+            level_up_event.send(LevelUpEvent);
+        }
 
         let text_font = TextFont {
             font_size: 25.0,

@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 use crate::game_manager::{GameRestartEvent, GameStartEvent};
 use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
+use crate::scoring::{Scoring, LevelUpEvent};
 
 #[derive(Component, Clone)]
 pub struct Tetromino {
@@ -342,6 +345,36 @@ pub fn gravity(
                     commands.entity(entity).insert(NeedsRedraw {});
                 }
         }
+    }
+}
+
+pub fn gravity_seconds_for_level(level: usize) -> f32 {
+    // What the gravity timer will be for each level
+    match level {
+        1 => 1.0, // OG 1.0
+        2 => 0.8,
+        3 => 0.6,
+        4 => 0.4,
+        5 => 0.3,
+        6 => 0.25,
+        7 => 0.2,
+        8 => 0.15,
+        9 => 0.1,
+        10 => 0.05,
+        _ => 0.01667, // Max gravity
+    }
+}
+
+pub fn update_gravity_timer(
+    mut gravity_timer: ResMut<GravityTimer>,
+    scoring_resource: Res<Scoring>,
+    mut level_up_event: EventReader<LevelUpEvent> 
+){
+    // Listens for level up event, then changes the time duration
+    if !level_up_event.is_empty(){
+        level_up_event.clear();
+        let new_duration = gravity_seconds_for_level(scoring_resource.level);
+        gravity_timer.0.set_duration(Duration::from_secs_f32(new_duration));
     }
 }
 
