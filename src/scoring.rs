@@ -32,6 +32,7 @@ pub fn draw_level_and_score(
             commands.entity(entity).despawn();
         }
 
+        // Calculate level
         scoring_resource.level = calculate_level(&scoring_resource.lines_cleared);
 
         let text_font = TextFont {
@@ -44,9 +45,9 @@ pub fn draw_level_and_score(
         let text_y = grid_config.start_y + ((GRID_HEIGHT as f32 / 2.0) * GRID_CELL_SIZE);
 
         commands.spawn((
-            Text2d::new(format!("Level: {}", scoring_resource.level)),
+            Text2d::new(format!("Level\n{}", scoring_resource.level)),
             text_font.clone(),
-            TextLayout::new_with_justify(JustifyText::Left),
+            TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
             ScoringText {}
         ));
@@ -56,9 +57,9 @@ pub fn draw_level_and_score(
         let text_y = grid_config.start_y + ((GRID_HEIGHT as f32 / 2.0) * GRID_CELL_SIZE) - 75.0;
 
         commands.spawn((
-            Text2d::new(format!("Score: {}", scoring_resource.score)),
+            Text2d::new(format!("Score\n{}", scoring_resource.score)),
             text_font.clone(),
-            TextLayout::new_with_justify(JustifyText::Left),
+            TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
             ScoringText {}
         ));
@@ -68,9 +69,9 @@ pub fn draw_level_and_score(
         let text_y = grid_config.start_y + ((GRID_HEIGHT as f32 / 2.0) * GRID_CELL_SIZE) - 150.0;
 
         commands.spawn((
-            Text2d::new(format!("Total Lines Cleared: {}", scoring_resource.lines_cleared)),
+            Text2d::new(format!("Lines Cleared\n{}", scoring_resource.lines_cleared)),
             text_font.clone(),
-            TextLayout::new_with_justify(JustifyText::Left),
+            TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
             ScoringText {}
         ));
@@ -81,6 +82,16 @@ pub fn draw_level_and_score(
 
 pub fn calculate_level(total_lines_cleared: &usize) -> usize {
     (total_lines_cleared / 10) + 1
+}
+
+pub fn calculate_score(lines_cleared_at_once: usize, level: usize) -> usize {
+    match lines_cleared_at_once {
+        1 => 100 * level,
+        2 => 300 * level,
+        3 => 500 * level,
+        4 => 800 * level,
+        _ => 0 // Should never happen
+    }
 }
 
 pub fn reset_level_and_score(

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::grid::{Grid, CellState, RedrawGridEvent, get_vec_index_from_grid_coordinates, CheckForLinesEvent};
-use crate::tetromino::{Active, GhostCell, LockInTetrominoEvent, RedrawGhostCellsEvent, SpawnNextPieceEvent, SpawnTetrominoEvent, Tetromino, TetrominoCell};
+use crate::tetromino::{Active, GhostCell, LockInTetrominoEvent, RedrawGhostCellsEvent, SpawnTetrominoEvent, Tetromino, TetrominoCell};
 use crate::resources::LockInTimer;
 
 pub fn lock_in_tetromino(

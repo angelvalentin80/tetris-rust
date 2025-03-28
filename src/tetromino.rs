@@ -147,9 +147,10 @@ pub fn spawn_tetromino(
             NeedsRedraw {}
         ));
         
-        // We spawn next piece here so that this happens after the current tetromino is grabbed 
-        // from the queue
-        spawn_next_piece_event.send(SpawnNextPieceEvent); //TODO are these racing each other?
+        // We spawn next piece here so that this happens after the current tetromino is popped 
+        // from the queue so we don't end up having the same piece being the "Tetromino" and the
+        // NextPiece 
+        spawn_next_piece_event.send(SpawnNextPieceEvent);
     }
 }
 

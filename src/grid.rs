@@ -1,7 +1,7 @@
 use bevy::{prelude::*, render::render_resource::encase::private::Length};
 
 use crate::game_manager::GameRestartEvent;
-use crate::scoring::{RedrawLevelAndScoreEvent, Scoring};
+use crate::scoring::{RedrawLevelAndScoreEvent, Scoring, calculate_score};
 
 pub const GRID_WIDTH: usize = 10;
 pub const GRID_HEIGHT: usize = 20; 
@@ -140,12 +140,18 @@ pub fn check_for_lines(
 
         // If there is a row that has been filled, drain them reversal style
         if !index_of_rows_filled.is_empty() {
+
+            let mut lines_just_cleared= 0;
+
             for row in index_of_rows_filled.iter().rev(){
                 grid.cells.drain(row.0..row.1);
-                // Increase lines cleared value and send update event 
-                scoring_resource.lines_cleared += 1; 
-                redraw_level_and_score_event.send(RedrawLevelAndScoreEvent); 
+                lines_just_cleared += 1;
             }
+
+            // Increase lines, calculate score and send redraw event 
+            scoring_resource.lines_cleared += lines_just_cleared; 
+            scoring_resource.score += calculate_score(lines_just_cleared, scoring_resource.level);
+            redraw_level_and_score_event.send(RedrawLevelAndScoreEvent); 
 
             for _ in 0..index_of_rows_filled.len() * 10{
                 grid.cells.push(CellState::Empty);
