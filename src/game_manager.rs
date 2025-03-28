@@ -32,6 +32,6 @@ pub fn detect_restart_game(
     if keyboard_input.just_pressed(KeyCode::KeyR) {
         game_state.started = false;
         game_restart_event.send(GameRestartEvent);
-        // TODO Reset scoring and levels when we get to that point
+        // TODO Reset scoring testing
     }
 }

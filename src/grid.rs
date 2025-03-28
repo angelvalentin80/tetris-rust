@@ -1,6 +1,7 @@
 use bevy::{prelude::*, render::render_resource::encase::private::Length};
 
 use crate::game_manager::GameRestartEvent;
+use crate::scoring::{RedrawLevelAndScoreEvent, Scoring};
 
 pub const GRID_WIDTH: usize = 10;
 pub const GRID_HEIGHT: usize = 20; 
@@ -93,17 +94,18 @@ pub fn redraw_grid(
 }
 
 pub fn reset_grid(
-    mut commands: Commands,
     mut redraw_grid_event: EventWriter<RedrawGridEvent>,
-    mut game_restart_event: EventReader<GameRestartEvent>
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    mut grid_resource: ResMut<Grid>
 ){
-    if !game_restart_event.is_empty(){
+    if !game_restart_event.is_empty() {
         game_restart_event.clear();
-
         // Change the grid to be all empty by replacing the resource
-        commands.remove_resource::<Grid>();
-        commands.insert_resource(Grid::new());
-
+        for cell in grid_resource.cells.iter_mut(){
+            if *cell != CellState::Empty{
+                *cell = CellState::Empty;
+            }
+        }
         // Send redraw grid event
         redraw_grid_event.send(RedrawGridEvent);
     }
@@ -116,7 +118,9 @@ pub struct CheckForLinesEvent;
 pub fn check_for_lines(
     mut grid: ResMut<Grid>,
     mut check_for_lines_event: EventReader<CheckForLinesEvent>,
-    mut redraw_grid_event: EventWriter<RedrawGridEvent>
+    mut redraw_grid_event: EventWriter<RedrawGridEvent>,
+    mut scoring_resource: ResMut<Scoring>,
+    mut redraw_level_and_score_event: EventWriter<RedrawLevelAndScoreEvent>,
 ) {
     // Figure out if any or some lines have been achieved on a 1D vector of CellStates 
     if !check_for_lines_event.is_empty(){
@@ -138,6 +142,9 @@ pub fn check_for_lines(
         if !index_of_rows_filled.is_empty() {
             for row in index_of_rows_filled.iter().rev(){
                 grid.cells.drain(row.0..row.1);
+                // Increase lines cleared value and send update event 
+                scoring_resource.lines_cleared += 1; 
+                redraw_level_and_score_event.send(RedrawLevelAndScoreEvent); 
             }
 
             for _ in 0..index_of_rows_filled.len() * 10{

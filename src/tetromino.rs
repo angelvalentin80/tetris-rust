@@ -136,6 +136,7 @@ pub fn spawn_tetromino(
     mut commands: Commands,
     mut tetromino_queue: ResMut<TetrominoQueue>,
     mut spawn_tetromino_event: EventReader<SpawnTetrominoEvent>,
+    mut spawn_next_piece_event: EventWriter<SpawnNextPieceEvent> 
 ) {
     if !spawn_tetromino_event.is_empty() {
         spawn_tetromino_event.clear();
@@ -146,6 +147,9 @@ pub fn spawn_tetromino(
             NeedsRedraw {}
         ));
         
+        // We spawn next piece here so that this happens after the current tetromino is grabbed 
+        // from the queue
+        spawn_next_piece_event.send(SpawnNextPieceEvent); //TODO are these racing each other?
     }
 }
 
@@ -697,7 +701,7 @@ pub fn draw_next_piece(
             for x in 0..4 {
                 if next_piece.shape[y][x] {
                     let cell_x = initial_x + (x as f32 * GRID_CELL_SIZE);
-                    let cell_y = initial_y + (y as f32 * GRID_CELL_SIZE);
+                    let cell_y = initial_y - (y as f32 * GRID_CELL_SIZE);
 
                     // Draw the next piece 
                     commands.spawn((
