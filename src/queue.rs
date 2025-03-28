@@ -35,9 +35,13 @@ pub fn shuffle_tetrominoes_into_queue(
             tetromino_queue.queue.push_back(letter);
         }
 
+        // Doing this because theres a chance where we spawn here
+        // and we spawn in lock in. So we only want to run this event
+        // if game start and let lock in handle spawning tetromino for the rest
         if !game_start_event.is_empty() {
             spawn_tetromino_event.send(SpawnTetrominoEvent);
         }
+
         game_start_event.clear();
     }
 }

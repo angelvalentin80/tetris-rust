@@ -6,6 +6,7 @@ use crate::systems::lock_in_tetromino;
 use crate::resources::{GravityTimer, LockInTimer, TetrominoQueue, GameState};
 use crate::queue::{shuffle_tetrominoes_into_queue, detect_bag_low, BagLowEvent, restart_queue};
 use crate::game_manager::{GameStartEvent, detect_start_game, detect_restart_game, GameRestartEvent};
+use crate::scoring::{Scoring, draw_level_and_score, RedrawLevelAndScoreEvent, reset_level_and_score};
 
 mod grid;
 mod tetromino;
@@ -13,6 +14,7 @@ mod systems;
 mod resources;
 mod queue;
 mod game_manager;
+mod scoring;
 
 fn main() {
     App::new()
@@ -27,6 +29,7 @@ fn main() {
         .add_event::<LockInTetrominoEvent>()
         .add_event::<SpawnNextPieceEvent>()
         .add_event::<GameRestartEvent>()
+        .add_event::<RedrawLevelAndScoreEvent>()
         // Systems
         .add_systems(Startup, 
             (
@@ -35,27 +38,10 @@ fn main() {
             ).chain())
         .add_systems(Update, 
             (
-                detect_start_game,
-                redraw_grid, 
-                shuffle_tetrominoes_into_queue,
-                spawn_tetromino,
-                draw_tetromino, 
-                draw_ghost_piece,
-                draw_next_piece_text,
-                spawn_next_piece,
-                draw_next_piece,
-                gravity, 
-                lock_in_tetromino, 
-                move_tetromino, 
-                detect_lock_position, 
-                detect_bag_low,
-                check_for_lines,
-                restart_queue,
-                detect_restart_game,
-                despawn_active_tetromino,
-                reset_grid,
-                despawn_next_piece
-            ).chain())
+                (detect_start_game, redraw_grid, shuffle_tetrominoes_into_queue, spawn_tetromino, draw_tetromino, draw_ghost_piece, draw_next_piece_text, draw_level_and_score, spawn_next_piece, draw_next_piece).chain(),
+                (gravity, lock_in_tetromino, move_tetromino, detect_lock_position, detect_bag_low, check_for_lines),
+                (restart_queue, detect_restart_game, despawn_active_tetromino, reset_grid, despawn_next_piece, reset_level_and_score)
+            ))
         .run();
 }
 
@@ -83,4 +69,7 @@ fn setup(mut commands: Commands) {
 
     // Add our tetromino queue resource
     commands.insert_resource(TetrominoQueue{queue: VecDeque::new()});
+
+    // Add our scoring resource
+    commands.insert_resource(Scoring{level: 1, score: 0, lines_cleared: 0});
 }
