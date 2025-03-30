@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::game_manager::GameRestartEvent;
 use crate::grid::{Grid, CellState, RedrawGridEvent, get_vec_index_from_grid_coordinates, CheckForLinesEvent};
 use crate::tetromino::{Active, GhostCell, LockInTetrominoEvent, RedrawGhostCellsEvent, SpawnTetrominoEvent, Tetromino, TetrominoCell};
 use crate::resources::LockInTimer;
@@ -54,4 +55,15 @@ pub fn lock_in_tetromino(
             lock_in_timer.0.reset();
         }
     } 
+}
+
+pub fn reset_lock_in_timer(
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    mut lock_in_timer: ResMut<LockInTimer>
+
+){
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+        lock_in_timer.0.reset();
+    }
 }

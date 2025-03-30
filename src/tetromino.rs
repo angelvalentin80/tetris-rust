@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 
-use crate::game_manager::{GameRestartEvent, GameStartEvent};
+use crate::game_manager::{GameRestartEvent, GameStartEvent, GameLoseEvent};
 use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 use crate::scoring::{Scoring, LevelUpEvent};
@@ -253,6 +253,10 @@ pub fn move_tetromino(
                 commands.entity(entity).insert(NeedsRedraw {});
                 gravity_timer.0.reset();
                 lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
+
+                if is_tetromino_in_green_zone(&tetromino){
+                    commands.entity(entity).insert_if_new(GreenZone{});
+                }
             }
         }
 
@@ -284,6 +288,10 @@ pub fn move_tetromino(
                 }
             }
             lock_in_timer.0.reset(); // Reset the lock-in timer when rotating 
+
+            if is_tetromino_in_green_zone(&tetromino){
+                commands.entity(entity).insert_if_new(GreenZone{});
+            }
         }
 
         // Rotate Counter Clockwise 
@@ -315,6 +323,10 @@ pub fn move_tetromino(
                 }
             }
             lock_in_timer.0.reset(); // Reset the lock-in timer when rotating
+
+            if is_tetromino_in_green_zone(&tetromino){
+                commands.entity(entity).insert_if_new(GreenZone{});
+            }
         }
 
         // Hard Drop
@@ -325,6 +337,10 @@ pub fn move_tetromino(
             commands.entity(entity).insert(NeedsRedraw {});
             lock_in_timer.0.reset(); // Reset the lock-in timer when hard dropping
             gravity_timer.0.reset();
+
+            if is_tetromino_in_green_zone(&tetromino){
+                commands.entity(entity).insert_if_new(GreenZone{});
+            }
         }
     }
 }
@@ -343,6 +359,9 @@ pub fn gravity(
                     tetromino.position.1 -= 1;
                     // Add NeedsRedraw component to tetromino to trigger redraw
                     commands.entity(entity).insert(NeedsRedraw {});
+                    if is_tetromino_in_green_zone(&tetromino){
+                        commands.entity(entity).insert_if_new(GreenZone{});
+                    }
                 }
         }
     }
@@ -375,6 +394,16 @@ pub fn update_gravity_timer(
         level_up_event.clear();
         let new_duration = gravity_seconds_for_level(scoring_resource.level);
         gravity_timer.0.set_duration(Duration::from_secs_f32(new_duration));
+    }
+}
+
+pub fn reset_gravity_timer(
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    mut gravity_timer: ResMut<GravityTimer>
+){
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+        gravity_timer.0.reset();
     }
 }
 
@@ -770,4 +799,73 @@ pub fn despawn_next_piece(
             commands.entity(entity).despawn();
         }
     }
+}
+
+// Lose Conditions
+
+#[derive(Component)]
+pub struct GreenZone;
+
+pub fn detect_lose_conditions(
+    mut game_lose_event: EventWriter<GameLoseEvent>,
+    grid_resource: Res<Grid>,
+    tetromino_query: Query<&Tetromino, With<Active>>,
+    tetromino_query_green: Query<&Tetromino, (With<Active>, With<GreenZone>)>,
+    lock_in_timer: Res<LockInTimer>
+){
+    // Lose Condition 1
+    // When a new piece appears at the top, but part of it 
+    //immediately overlaps with blocks already on the board → Game Over.
+    // Lose Condition 2
+    // If a piece lands and locks into place, but part of it is outside 
+    // the visible play area, the game ends.
+    // Lose Condition 3
+    // - If a block is **pushed into this invisible zone**, the game ends.
+    // This typically happens due to **wall kicks or rotations** that move 
+    // the piece into an illegal space.
+    // if piece was already in green zone, but somehow gets pushed back into red zone
+    for tetromino in tetromino_query.iter(){
+        for y in 0..4{ //TODO this pattern is around a lot we can probably make this into a function
+            for x in 0..4 {
+                if tetromino.shape[y][x]{
+                    let shape_y = tetromino.position.1 - y as i32;                     
+                    if is_tetromino_hit_floor_piece(&tetromino, &grid_resource) && shape_y > 19 && lock_in_timer.0.finished() {
+                        game_lose_event.send(GameLoseEvent);
+                    }
+                } 
+            }
+        }
+    }
+
+    for tetromino_green in tetromino_query_green.iter(){
+        for y in 0..4{ //TODO this pattern is around a lot we can probably make this into a function
+            for x in 0..4 {
+                if tetromino_green.shape[y][x]{
+                    let shape_y = tetromino_green.position.1 - y as i32;                     
+                    if shape_y > 19 {
+                        game_lose_event.send(GameLoseEvent);
+                    }
+                } 
+            }
+        }
+
+    }
+} 
+
+pub fn is_tetromino_in_green_zone(
+    tetromino: &Tetromino
+) -> bool {
+    let mut y_positions: Vec<i32> = vec![];
+    for y in 0..4{
+        for x in 0..4 {
+            if tetromino.shape[y][x]{
+                let shape_y = tetromino.position.1 - y as i32;                     
+                y_positions.push(shape_y);
+            } 
+        }
+    }
+    if y_positions.iter().all(|&y_pos| y_pos < 20){
+        return true
+    }
+    false
 }
