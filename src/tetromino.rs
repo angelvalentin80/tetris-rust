@@ -3,10 +3,11 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::game_manager::{GameRestartEvent, GameStartEvent, GameLoseEvent};
-use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH};
+use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH, RedrawGridEvent, CheckForLinesEvent};
 use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
 use crate::scoring::{Scoring, LevelUpEvent};
 
+// Components
 #[derive(Component, Clone)]
 pub struct Tetromino {
     pub shape: [[bool; 4]; 4], // 4x4 grid for the tetromino shape
@@ -87,6 +88,31 @@ impl Tetromino {
     }
 }
 
+#[derive(Component)]
+pub struct TetrominoCell {}
+
+#[derive(Component)]
+pub struct Active {}
+
+#[derive(Component)]
+pub struct NeedsRedraw();
+
+#[derive(Component)]
+pub struct GhostCell {}
+
+#[derive(Component)]
+pub struct GreenZone;
+
+#[derive(Component)]
+pub struct NextPiece;
+
+#[derive(Component)]
+pub struct NextPieceCells;
+
+#[derive(Component)]
+pub struct NextTetrominoPieceText;
+
+// Enums
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum TetrominoLetter {
     I,
@@ -120,20 +146,19 @@ impl TetrominoColor {
         }
     }
 }
-#[derive(Component)]
-pub struct TetrominoCell {}
 
-#[derive(Component)]
-pub struct Active {}
-
-#[derive(Component)]
-pub struct NeedsRedraw();
-
+// Events
 #[derive(Event)]
 pub struct SpawnTetrominoEvent;
 
 #[derive(Event)]
 pub struct LockInTetrominoEvent;
+
+#[derive(Event)]
+pub struct SpawnNextPieceEvent;
+
+#[derive(Event)]
+pub struct RedrawGhostCellsEvent;
 
 pub fn spawn_tetromino(
     mut commands: Commands,
@@ -411,14 +436,92 @@ pub fn detect_lock_position(
     mut lock_in_timer: ResMut<LockInTimer>,
     time: Res<Time>,
     grid: Res<Grid>,
-    tetromino_query: Query<&Tetromino, With<Active>>,
-    mut lock_in_tetromino_event: EventWriter<LockInTetrominoEvent>,
+    tetromino_query: Query<&Tetromino, With<Active>>
 ) {
     for tetromino in tetromino_query.iter() {
         if is_tetromino_hit_floor(&tetromino) || is_tetromino_hit_floor_piece(&tetromino, &grid) {
             lock_in_timer.0.tick(time.delta());
-            lock_in_tetromino_event.send(LockInTetrominoEvent);
         }
+    }
+}
+
+pub fn maybe_lock_in_tetromino(
+    lock_in_timer: Res<LockInTimer>,
+    mut lock_in_tetromino_event: EventWriter<LockInTetrominoEvent>,
+){
+    if lock_in_timer.0.finished(){
+        lock_in_tetromino_event.send(LockInTetrominoEvent);
+    }
+}
+
+pub fn lock_in_tetromino(
+    mut commands: Commands,
+    mut grid: ResMut<Grid>, 
+    mut redraw_grid_event: EventWriter<RedrawGridEvent>,
+    mut spawn_tetromino_event: EventWriter<SpawnTetrominoEvent>,
+    tetromino_query: Query<(Entity, &Tetromino), With<Active>>,
+    tetromino_cell_query: Query<(Entity, &TetrominoCell)>,
+    ghost_cell_query: Query<(Entity, &GhostCell)>,
+    mut redraw_ghost_cells_event: EventReader<RedrawGhostCellsEvent>, 
+    mut check_for_lines_event: EventWriter<CheckForLinesEvent>,
+    mut lock_in_tetromino_event: EventReader<LockInTetrominoEvent>,
+    mut game_lose_event: EventWriter<GameLoseEvent>,
+    mut lock_in_timer: ResMut<LockInTimer>
+) {
+    if !lock_in_tetromino_event.is_empty(){
+        lock_in_tetromino_event.clear();
+        
+
+        for (entity, tetromino) in tetromino_query.iter() {
+
+            // Check whether the tetromino piece is in a "losing" condition
+            if is_lose_conditions(&tetromino, &grid) {
+                game_lose_event.send(GameLoseEvent);
+            }
+
+            // Lock in the tetromino by updating the grid state
+            let start_x = tetromino.position.0;
+            let start_y = tetromino.position.1;
+
+            for y in 0..4 {
+                for x in 0..4 {
+                    if tetromino.shape[y][x] {
+                        let index = get_vec_index_from_grid_coordinates(start_x + x as i32, start_y - y as i32);
+                        grid.cells[index] = CellState::Filled(tetromino.color);
+                    }
+                }
+            }
+
+            commands.entity(entity).remove::<Active>();
+            commands.entity(entity).despawn();
+        }
+
+        for (entity, _) in tetromino_cell_query.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        if !redraw_ghost_cells_event.is_empty() {
+            redraw_ghost_cells_event.clear();
+            for (entity, _) in ghost_cell_query.iter() {
+                commands.entity(entity).despawn();
+            }
+        }
+
+        check_for_lines_event.send(CheckForLinesEvent);
+        redraw_grid_event.send(RedrawGridEvent);
+        spawn_tetromino_event.send(SpawnTetrominoEvent);
+        lock_in_timer.0.reset()
+    } 
+}
+
+pub fn reset_lock_in_timer(
+    mut game_restart_event: EventReader<GameRestartEvent>,
+    mut lock_in_timer: ResMut<LockInTimer>
+
+){
+    if !game_restart_event.is_empty(){
+        game_restart_event.clear();
+        lock_in_timer.0.reset();
     }
 }
 
@@ -632,11 +735,8 @@ fn maybe_try_kicks(
 }
 
 // Ghost Piece
-#[derive(Component)]
-pub struct GhostCell {}
 
-#[derive(Event)]
-pub struct RedrawGhostCellsEvent;
+
 
 pub fn draw_ghost_piece(
     mut commands: Commands,
@@ -682,9 +782,6 @@ pub fn draw_ghost_piece(
 }
 
 // Next Tetromino Piece
-#[derive(Component)]
-pub struct NextTetrominoPieceText;
-
 pub fn draw_next_piece_text(
     mut commands: Commands,
     grid_config: Res<GridConfig>,
@@ -710,14 +807,6 @@ pub fn draw_next_piece_text(
     }
 } 
 
-#[derive(Component)]
-pub struct NextPiece;
-
-#[derive(Component)]
-pub struct NextPieceCells;
-
-#[derive(Event)]
-pub struct SpawnNextPieceEvent;
 
 pub fn spawn_next_piece(
     mut commands: Commands,
@@ -802,41 +891,38 @@ pub fn despawn_next_piece(
 }
 
 // Lose Conditions
-
-#[derive(Component)]
-pub struct GreenZone;
-
-pub fn detect_lose_conditions(
-    mut game_lose_event: EventWriter<GameLoseEvent>,
-    grid_resource: Res<Grid>,
-    tetromino_query: Query<&Tetromino, With<Active>>,
-    tetromino_query_green: Query<&Tetromino, (With<Active>, With<GreenZone>)>,
-    lock_in_timer: Res<LockInTimer>
-){
+pub fn is_lose_conditions(
+    tetromino: &Tetromino,
+    grid_resource: &Grid
+) -> bool {
     // Lose Condition 1
     // When a new piece appears at the top, but part of it 
     //immediately overlaps with blocks already on the board → Game Over.
     // Lose Condition 2
     // If a piece lands and locks into place, but part of it is outside 
     // the visible play area, the game ends.
+    for y in 0..4{ //TODO this pattern is around a lot we can probably make this into a function
+        for x in 0..4 {
+            if tetromino.shape[y][x]{
+                let shape_y = tetromino.position.1 - y as i32;                     
+                if is_tetromino_hit_floor_piece(&tetromino, &grid_resource) && shape_y > 19 {
+                    return true
+                }
+            } 
+        }
+    }
+    false
+} 
+
+pub fn detect_kick_back_to_red_zone(
+    tetromino_query_green: Query<&Tetromino, (With<Active>, With<GreenZone>)>,
+    mut game_lose_event: EventWriter<GameLoseEvent>,
+){
     // Lose Condition 3
     // - If a block is **pushed into this invisible zone**, the game ends.
     // This typically happens due to **wall kicks or rotations** that move 
     // the piece into an illegal space.
     // if piece was already in green zone, but somehow gets pushed back into red zone
-    for tetromino in tetromino_query.iter(){
-        for y in 0..4{ //TODO this pattern is around a lot we can probably make this into a function
-            for x in 0..4 {
-                if tetromino.shape[y][x]{
-                    let shape_y = tetromino.position.1 - y as i32;                     
-                    if is_tetromino_hit_floor_piece(&tetromino, &grid_resource) && shape_y > 19 && lock_in_timer.0.finished() {
-                        game_lose_event.send(GameLoseEvent);
-                    }
-                } 
-            }
-        }
-    }
-
     for tetromino_green in tetromino_query_green.iter(){
         for y in 0..4{ //TODO this pattern is around a lot we can probably make this into a function
             for x in 0..4 {
@@ -844,13 +930,14 @@ pub fn detect_lose_conditions(
                     let shape_y = tetromino_green.position.1 - y as i32;                     
                     if shape_y > 19 {
                         game_lose_event.send(GameLoseEvent);
+                        break;
                     }
                 } 
             }
         }
-
     }
-} 
+
+}
 
 pub fn is_tetromino_in_green_zone(
     tetromino: &Tetromino
