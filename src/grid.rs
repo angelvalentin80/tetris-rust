@@ -50,7 +50,7 @@ pub fn draw_grid(
         for x in 0..GRID_WIDTH {
             let index = y * GRID_WIDTH + x;
             let color = match &grid.cells[index] {
-                CellState::Empty => Color::srgb(0.0, 0.0, 0.0),
+                CellState::Empty => Color::srgb(0.12, 0.12, 0.18),
                 CellState::Filled(color) => *color 
             };
 

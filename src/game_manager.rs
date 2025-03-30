@@ -68,7 +68,7 @@ pub fn spawn_lose_text(
 
         commands.spawn((
             Text2d::new("You Lose"),
-            TextColor(Color::srgb(1.0, 0.0, 0.0)),
+            TextColor(Color::srgb(1.0, 0.2, 0.2)),
             text_font.clone(),
             TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
