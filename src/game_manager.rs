@@ -1,13 +1,30 @@
 use::bevy::prelude::*;
 
-use crate::resources::GameState;
 use crate::grid::{GridConfig, GRID_CELL_SIZE, GRID_WIDTH, GRID_HEIGHT};
+
+pub struct GameManagerPlugin;
+impl Plugin for GameManagerPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(GameState { started: false })
+            .add_event::<GameStartEvent>()
+            .add_event::<GameRestartEvent>()
+            .add_event::<GameLoseEvent>()
+            .add_systems(Update, (detect_start_game, detect_restart_game, spawn_lose_text, animate_lose_text, reset_lose_text));
+    }
+}
+
 
 #[derive(Event)]
 pub struct GameStartEvent;
 
 #[derive(Event)]
 pub struct GameLoseEvent;
+
+#[derive(Resource)]
+pub struct GameState {
+    pub started: bool,
+}
 
 pub fn detect_start_game(
     mut game_start_event: EventWriter<GameStartEvent>,
@@ -68,7 +85,7 @@ pub fn spawn_lose_text(
 
         commands.spawn((
             Text2d::new("You Lose"),
-            TextColor(Color::srgb(1.0, 0.0, 0.0)),
+            TextColor(Color::srgb(1.0, 0.2, 0.2)),
             text_font.clone(),
             TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),

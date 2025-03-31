@@ -4,8 +4,23 @@ use bevy::prelude::*;
 
 use crate::game_manager::{GameRestartEvent, GameStartEvent, GameLoseEvent};
 use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH, RedrawGridEvent, CheckForLinesEvent};
-use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
+use crate::queue::TetrominoQueue;
 use crate::scoring::{Scoring, LevelUpEvent};
+
+pub struct TetrominoPlugin;
+impl Plugin for TetrominoPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(GravityTimer(Timer::from_seconds(gravity_seconds_for_level(1), TimerMode::Repeating)))
+            .insert_resource(LockInTimer(Timer::from_seconds(0.5, TimerMode::Once)))
+            .add_event::<SpawnTetrominoEvent>()
+            .add_event::<RedrawGhostCellsEvent>()
+            .add_event::<LockInTetrominoEvent>()
+            .add_event::<SpawnNextPieceEvent>()
+            .add_systems(Update, (spawn_tetromino, draw_tetromino, draw_ghost_piece, draw_next_piece_text, spawn_next_piece, draw_next_piece).chain()) 
+            .add_systems(Update, (gravity, detect_lock_position, lock_in_tetromino, move_tetromino, update_gravity_timer, maybe_lock_in_tetromino, despawn_active_tetromino, despawn_next_piece, reset_lock_in_timer, reset_gravity_timer));
+    }
+}
 
 // Components
 #[derive(Component, Clone)]
@@ -50,13 +65,13 @@ impl Tetromino {
                                    [false,false,false,false]],
         };
         let color = match letter {
-            TetrominoLetter::I => TetrominoColor::LightBlue.to_color(),
-            TetrominoLetter::J => TetrominoColor::DarkBlue.to_color(),
-            TetrominoLetter::L => TetrominoColor::Orange.to_color(),
-            TetrominoLetter::O => TetrominoColor::Yellow.to_color(),
-            TetrominoLetter::S => TetrominoColor::Green.to_color(),
-            TetrominoLetter::Z => TetrominoColor::Red.to_color(),
-            TetrominoLetter::T => TetrominoColor::Magenta.to_color(),
+            TetrominoLetter::I => TetrominoColor::Cyan.to_color(),
+            TetrominoLetter::J => TetrominoColor::Indigo.to_color(),
+            TetrominoLetter::L => TetrominoColor::Tangerine.to_color(),
+            TetrominoLetter::O => TetrominoColor::Gold.to_color(),
+            TetrominoLetter::S => TetrominoColor::Emerald.to_color(),
+            TetrominoLetter::Z => TetrominoColor::Crimson.to_color(),
+            TetrominoLetter::T => TetrominoColor::Orchid.to_color(),
         };
         Self {
             shape,
@@ -101,9 +116,6 @@ pub struct NeedsRedraw();
 pub struct GhostCell {}
 
 #[derive(Component)]
-pub struct GreenZone;
-
-#[derive(Component)]
 pub struct NextPiece;
 
 #[derive(Component)]
@@ -125,24 +137,24 @@ pub enum TetrominoLetter {
 }
 
 pub enum TetrominoColor {
-    LightBlue,
-    DarkBlue,
-    Orange,
-    Yellow,
-    Green,
-    Red,
-    Magenta,
+    Cyan,
+    Indigo,
+    Tangerine,
+    Gold,
+    Emerald,
+    Crimson,
+    Orchid
 }
 impl TetrominoColor {
     pub fn to_color(&self) -> Color {
         match self {
-            TetrominoColor::LightBlue => Color::srgb(0.0, 1.0, 1.0),
-            TetrominoColor::DarkBlue => Color::srgb(0.0, 0.0, 1.0),
-            TetrominoColor::Orange => Color::srgb(1.0, 0.5, 0.0),
-            TetrominoColor::Yellow => Color::srgb(1.0, 1.0, 0.0),
-            TetrominoColor::Green => Color::srgb(0.0, 1.0, 0.0),
-            TetrominoColor::Red => Color::srgb(1.0, 0.0, 0.0),
-            TetrominoColor::Magenta => Color::srgb(1.0, 0.0, 1.0),
+            TetrominoColor::Cyan => Color::srgb(0.0, 0.95, 1.0),
+            TetrominoColor::Indigo => Color::srgb(0.1, 0.3, 0.8),
+            TetrominoColor::Tangerine => Color::srgb(1.0, 0.6, 0.2),
+            TetrominoColor::Gold => Color::srgb(1.0, 0.85, 0.2),
+            TetrominoColor::Emerald => Color::srgb(0.0, 0.8, 0.4),
+            TetrominoColor::Crimson => Color::srgb(0.85, 0.1, 0.3),
+            TetrominoColor::Orchid => Color::srgb(0.7, 0.3, 0.8),
         }
     }
 }
@@ -159,6 +171,13 @@ pub struct SpawnNextPieceEvent;
 
 #[derive(Event)]
 pub struct RedrawGhostCellsEvent;
+
+//Resources
+#[derive(Resource)]
+pub struct GravityTimer(pub Timer);
+
+#[derive(Resource)]
+pub struct LockInTimer(pub Timer);
 
 pub fn spawn_tetromino(
     mut commands: Commands,
@@ -278,10 +297,6 @@ pub fn move_tetromino(
                 commands.entity(entity).insert(NeedsRedraw {});
                 gravity_timer.0.reset();
                 lock_in_timer.0.reset(); // Reset the lock-in timer when moving right 
-
-                if is_tetromino_in_green_zone(&tetromino){
-                    commands.entity(entity).insert_if_new(GreenZone{});
-                }
             }
         }
 
@@ -313,10 +328,6 @@ pub fn move_tetromino(
                 }
             }
             lock_in_timer.0.reset(); // Reset the lock-in timer when rotating 
-
-            if is_tetromino_in_green_zone(&tetromino){
-                commands.entity(entity).insert_if_new(GreenZone{});
-            }
         }
 
         // Rotate Counter Clockwise 
@@ -348,10 +359,6 @@ pub fn move_tetromino(
                 }
             }
             lock_in_timer.0.reset(); // Reset the lock-in timer when rotating
-
-            if is_tetromino_in_green_zone(&tetromino){
-                commands.entity(entity).insert_if_new(GreenZone{});
-            }
         }
 
         // Hard Drop
@@ -362,10 +369,6 @@ pub fn move_tetromino(
             commands.entity(entity).insert(NeedsRedraw {});
             lock_in_timer.0.reset(); // Reset the lock-in timer when hard dropping
             gravity_timer.0.reset();
-
-            if is_tetromino_in_green_zone(&tetromino){
-                commands.entity(entity).insert_if_new(GreenZone{});
-            }
         }
     }
 }
@@ -384,9 +387,6 @@ pub fn gravity(
                     tetromino.position.1 -= 1;
                     // Add NeedsRedraw component to tetromino to trigger redraw
                     commands.entity(entity).insert(NeedsRedraw {});
-                    if is_tetromino_in_green_zone(&tetromino){
-                        commands.entity(entity).insert_if_new(GreenZone{});
-                    }
                 }
         }
     }
@@ -793,12 +793,14 @@ pub fn draw_next_piece_text(
             font_size: 25.0,
             ..default()
         };
+        let text_color = TextColor(Color::srgb(0.8, 0.85, 0.9));
 
         let text_x = (grid_config.start_x + (GRID_WIDTH as f32 * GRID_CELL_SIZE)) + 100.0;
         let text_y = grid_config.start_y + (GRID_HEIGHT as f32 * GRID_CELL_SIZE) - 25.0;
 
         commands.spawn((
             Text2d::new("Next Piece"),
+            text_color,
             text_font.clone(),
             TextLayout::new_with_justify(JustifyText::Right),
             Transform::from_xyz(text_x, text_y, 0.0),
@@ -913,46 +915,3 @@ pub fn is_lose_conditions(
     }
     false
 } 
-
-pub fn detect_kick_back_to_red_zone(
-    tetromino_query_green: Query<&Tetromino, (With<Active>, With<GreenZone>)>,
-    mut game_lose_event: EventWriter<GameLoseEvent>,
-){
-    // Lose Condition 3
-    // - If a block is **pushed into this invisible zone**, the game ends.
-    // This typically happens due to **wall kicks or rotations** that move 
-    // the piece into an illegal space.
-    // if piece was already in green zone, but somehow gets pushed back into red zone
-    for tetromino_green in tetromino_query_green.iter(){
-        for y in 0..4{ //TODO this pattern is around a lot we can probably make this into a function
-            for x in 0..4 {
-                if tetromino_green.shape[y][x]{
-                    let shape_y = tetromino_green.position.1 - y as i32;                     
-                    if shape_y > 19 {
-                        game_lose_event.send(GameLoseEvent);
-                        break;
-                    }
-                } 
-            }
-        }
-    }
-
-}
-
-pub fn is_tetromino_in_green_zone(
-    tetromino: &Tetromino
-) -> bool {
-    let mut y_positions: Vec<i32> = vec![];
-    for y in 0..4{
-        for x in 0..4 {
-            if tetromino.shape[y][x]{
-                let shape_y = tetromino.position.1 - y as i32;                     
-                y_positions.push(shape_y);
-            } 
-        }
-    }
-    if y_positions.iter().all(|&y_pos| y_pos < 20){
-        return true
-    }
-    false
-}

@@ -1,6 +1,17 @@
 use bevy::prelude::*;
 use crate::grid::{GridConfig, GRID_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT};
-use crate::game_manager::{GameRestartEvent, GameStartEvent};
+use crate::game_manager::GameStartEvent;
+
+pub struct ScoringPlugin;
+impl Plugin for ScoringPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(Scoring{level: 1, score: 0, lines_cleared: 0})
+            .add_event::<RedrawLevelAndScoreEvent>()
+            .add_event::<LevelUpEvent>()
+            .add_systems(Update, (draw_level_and_score, reset_level_and_score));
+    }
+}
 
 #[derive(Resource)]
 pub struct Scoring{
@@ -46,6 +57,7 @@ pub fn draw_level_and_score(
             font_size: 25.0,
             ..default()
         };
+        let text_color = TextColor(Color::srgb(0.8, 0.85, 0.9));
 
         // Draw Level
         let text_x = (grid_config.start_x + (GRID_WIDTH as f32 * GRID_CELL_SIZE)) + 100.0;
@@ -54,6 +66,7 @@ pub fn draw_level_and_score(
         commands.spawn((
             Text2d::new(format!("Level\n{}", scoring_resource.level)),
             text_font.clone(),
+            text_color,
             TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
             ScoringText {}
@@ -66,6 +79,7 @@ pub fn draw_level_and_score(
         commands.spawn((
             Text2d::new(format!("Score\n{}", scoring_resource.score)),
             text_font.clone(),
+            text_color,
             TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
             ScoringText {}
@@ -78,6 +92,7 @@ pub fn draw_level_and_score(
         commands.spawn((
             Text2d::new(format!("Lines Cleared\n{}", scoring_resource.lines_cleared)),
             text_font.clone(),
+            text_color,
             TextLayout::new_with_justify(JustifyText::Center),
             Transform::from_xyz(text_x, text_y, 0.0),
             ScoringText {}
@@ -103,14 +118,12 @@ pub fn calculate_score(lines_cleared_at_once: usize, level: usize) -> usize {
 
 pub fn reset_level_and_score(
     mut game_start_event: EventReader<GameStartEvent>,
-    mut game_restart_event: EventReader<GameRestartEvent>,
     mut redraw_level_and_score_event: EventWriter<RedrawLevelAndScoreEvent>,
     mut scoring_resource: ResMut<Scoring>
 ){
-    // Receive Restart Game Event and reset score and level
-    if !game_start_event.is_empty() || !game_restart_event.is_empty(){
+    // Receive Game Start Event and reset score
+    if !game_start_event.is_empty(){
         game_start_event.clear();
-        game_restart_event.clear();
 
         // Reset score 
         scoring_resource.level = 0;
