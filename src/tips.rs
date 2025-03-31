@@ -1,6 +1,22 @@
 use bevy::prelude::*;
 use crate::grid::{GridConfig, GRID_HEIGHT, GRID_CELL_SIZE, GRID_HIDDEN_HEIGHT};
  
+pub struct TipsPlugin;
+impl Plugin for TipsPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .add_event::<DrawGameTipsEvent>()
+            .add_systems(Startup, setup)
+            .add_systems(Update, (toggle_game_tips, draw_game_tips));
+    }
+}
+
+fn setup(
+    mut draw_game_tips_event: EventWriter<DrawGameTipsEvent>
+){
+    // Adding our help text
+    draw_game_tips_event.send(DrawGameTipsEvent);
+}
 
 #[derive(Component)]
 pub struct GameTipText;

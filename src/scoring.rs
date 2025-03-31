@@ -2,6 +2,17 @@ use bevy::prelude::*;
 use crate::grid::{GridConfig, GRID_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT};
 use crate::game_manager::GameStartEvent;
 
+pub struct ScoringPlugin;
+impl Plugin for ScoringPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(Scoring{level: 1, score: 0, lines_cleared: 0})
+            .add_event::<RedrawLevelAndScoreEvent>()
+            .add_event::<LevelUpEvent>()
+            .add_systems(Update, (draw_level_and_score, reset_level_and_score));
+    }
+}
+
 #[derive(Resource)]
 pub struct Scoring{
     pub level: usize,

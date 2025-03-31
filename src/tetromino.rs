@@ -4,8 +4,23 @@ use bevy::prelude::*;
 
 use crate::game_manager::{GameRestartEvent, GameStartEvent, GameLoseEvent};
 use crate::grid::{get_vec_index_from_grid_coordinates, CellState, Grid, GridConfig, CELL_BORDER_WIDTH, GRID_CELL_SIZE, GRID_HEIGHT, GRID_HIDDEN_HEIGHT, GRID_WIDTH, RedrawGridEvent, CheckForLinesEvent};
-use crate::resources::{TetrominoQueue, LockInTimer, GravityTimer};
+use crate::queue::TetrominoQueue;
 use crate::scoring::{Scoring, LevelUpEvent};
+
+pub struct TetrominoPlugin;
+impl Plugin for TetrominoPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(GravityTimer(Timer::from_seconds(gravity_seconds_for_level(1), TimerMode::Repeating)))
+            .insert_resource(LockInTimer(Timer::from_seconds(0.5, TimerMode::Once)))
+            .add_event::<SpawnTetrominoEvent>()
+            .add_event::<RedrawGhostCellsEvent>()
+            .add_event::<LockInTetrominoEvent>()
+            .add_event::<SpawnNextPieceEvent>()
+            .add_systems(Update, (spawn_tetromino, draw_tetromino, draw_ghost_piece, draw_next_piece_text, spawn_next_piece, draw_next_piece).chain()) 
+            .add_systems(Update, (gravity, detect_lock_position, lock_in_tetromino, move_tetromino, update_gravity_timer, maybe_lock_in_tetromino, despawn_active_tetromino, despawn_next_piece, reset_lock_in_timer, reset_gravity_timer));
+    }
+}
 
 // Components
 #[derive(Component, Clone)]
@@ -156,6 +171,13 @@ pub struct SpawnNextPieceEvent;
 
 #[derive(Event)]
 pub struct RedrawGhostCellsEvent;
+
+//Resources
+#[derive(Resource)]
+pub struct GravityTimer(pub Timer);
+
+#[derive(Resource)]
+pub struct LockInTimer(pub Timer);
 
 pub fn spawn_tetromino(
     mut commands: Commands,

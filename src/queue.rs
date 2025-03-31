@@ -2,11 +2,27 @@ use bevy::prelude::*;
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 use crate::tetromino::{TetrominoLetter, SpawnTetrominoEvent};
-use crate::resources::TetrominoQueue;
 use crate::game_manager::{GameRestartEvent, GameStartEvent};
+use std::collections::VecDeque;
+
+pub struct QueuePlugin;
+impl Plugin for QueuePlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(TetrominoQueue{queue: VecDeque::new()})
+            .add_event::<BagLowEvent>()
+            .add_systems(Update, (shuffle_tetrominoes_into_queue, detect_bag_low, restart_queue));
+    }
+}
+
 
 #[derive(Event)]
 pub struct BagLowEvent;
+
+#[derive(Resource, Debug)] //TODO remove debug??
+pub struct TetrominoQueue {
+    pub queue: VecDeque<TetrominoLetter>,
+}
 
 pub fn shuffle_tetrominoes_into_queue(
     mut tetromino_queue: ResMut<TetrominoQueue>,

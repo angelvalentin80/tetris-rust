@@ -3,6 +3,22 @@ use bevy::{prelude::*, render::render_resource::encase::private::Length};
 use crate::game_manager::GameRestartEvent;
 use crate::scoring::{RedrawLevelAndScoreEvent, Scoring, calculate_score};
 
+pub struct GridPlugin;
+impl Plugin for GridPlugin{
+    fn build(&self, app: &mut App){
+        app
+            .insert_resource(Grid::new())
+            .insert_resource(GridConfig {
+                start_x: -(GRID_WIDTH as f32 * (GRID_CELL_SIZE + CELL_BORDER_WIDTH)) / 2.0,
+                start_y: -(GRID_HEIGHT as f32 * (GRID_CELL_SIZE + CELL_BORDER_WIDTH)) / 2.0,
+            })
+            .add_event::<RedrawGridEvent>()
+            .add_event::<CheckForLinesEvent>()
+            .add_systems(Startup, draw_grid)
+            .add_systems(Update, (check_for_lines, redraw_grid, check_for_lines, reset_grid));
+    }
+}
+
 pub const GRID_WIDTH: usize = 10;
 pub const GRID_HEIGHT: usize = 20; 
 pub const GRID_HIDDEN_HEIGHT: usize = 6; // Every row above 20 is hidden
