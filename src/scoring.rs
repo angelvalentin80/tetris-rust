@@ -32,6 +32,7 @@ pub struct LevelUpEvent;
 pub fn draw_level_and_score(
     mut commands: Commands,
     mut scoring_resource: ResMut<Scoring>,
+    asset_server: Res<AssetServer>,
     grid_config: Res<GridConfig>,
     mut redraw_level_and_score_event: EventReader<RedrawLevelAndScoreEvent>,
     mut game_start_event: EventReader<GameStartEvent>,
@@ -53,7 +54,9 @@ pub fn draw_level_and_score(
             level_up_event.send(LevelUpEvent);
         }
 
+        let font = asset_server.load("fonts/gg-sans-Regular.ttf");
         let text_font = TextFont {
+            font: font.clone(),
             font_size: 25.0,
             ..default()
         };

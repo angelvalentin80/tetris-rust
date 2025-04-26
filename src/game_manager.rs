@@ -68,13 +68,16 @@ pub struct AnimateLoseText;
 
 pub fn spawn_lose_text(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     grid_config: Res<GridConfig>,
     mut game_lose_event: EventReader<GameLoseEvent>
 ){
     if !game_lose_event.is_empty() {
         game_lose_event.clear();
 
+        let font = asset_server.load("fonts/gg-sans-Regular.ttf");
         let text_font = TextFont {
+            font: font.clone(),
             font_size: 100.0,
             ..default()
         };

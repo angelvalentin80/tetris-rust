@@ -26,13 +26,16 @@ pub struct DrawGameTipsEvent;
 
 pub fn draw_game_tips(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     grid_config: Res<GridConfig>,
     mut draw_game_tips_event: EventReader<DrawGameTipsEvent>,
 ){
     if !draw_game_tips_event.is_empty(){
         draw_game_tips_event.clear();
 
+        let font = asset_server.load("fonts/gg-sans-Regular.ttf");
         let text_font = TextFont {
+            font: font.clone(),
             font_size: 13.0,
             ..default()
         };

@@ -784,12 +784,16 @@ pub fn draw_ghost_piece(
 // Next Tetromino Piece
 pub fn draw_next_piece_text(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     grid_config: Res<GridConfig>,
     mut game_start_event: EventReader<GameStartEvent>
 ){
     if !game_start_event.is_empty(){
         game_start_event.clear();
+
+        let font = asset_server.load("fonts/gg-sans-Regular.ttf");
         let text_font = TextFont {
+            font: font.clone(),
             font_size: 25.0,
             ..default()
         };
